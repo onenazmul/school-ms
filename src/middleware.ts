@@ -35,12 +35,24 @@ export async function middleware(req: NextRequest) {
 
   // ── Fully public paths ────────────────────────────────────────────────────
   if (
-    pathname.startsWith("/apply") ||       // apply form, apply/login, apply/forgot-password
     pathname.startsWith("/login") ||
     pathname.startsWith("/student-login") ||
     pathname.startsWith("/api/auth") ||
     pathname === "/"
   ) {
+    return NextResponse.next();
+  }
+
+  // ── Apply paths — redirect logged-in applicants away from form & login ────
+  if (pathname === "/apply" || pathname === "/apply/login") {
+    const session = await getStudentCookieSession(req);
+    if (session) {
+      return NextResponse.redirect(new URL("/admission/dashboard", req.url));
+    }
+    return NextResponse.next();
+  }
+  // All other /apply/* sub-paths (forgot-password, etc.) are always public
+  if (pathname.startsWith("/apply")) {
     return NextResponse.next();
   }
 

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms commit --amend -m ' *)",
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms ls-files)",
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms rm --cached .DS_Store src/.DS_Store src/app/.DS_Store 'src/app/\\(auth\\)/.DS_Store' 'src/app/\\(student-auth\\)/.DS_Store' .env.local .claude/settings.local.json)",
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms gc --prune=now --aggressive)",
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms log --oneline)",
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms reflog expire --expire=now --all)",
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms gc --prune=now)"
+    ]
+  }
+}
