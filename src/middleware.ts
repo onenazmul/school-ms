@@ -1,0 +1,116 @@
+// middleware.ts
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth/server";
+import { jwtVerify } from "jose";
+
+// ─── Route maps ──────────────────────────────────────────────────────────────
+
+const STAFF_ROLE_HOME: Record<string, string> = {
+  admin:   "/admin/dashboard",
+  teacher: "/teacher/dashboard",
+};
+const STAFF_ROLE_PREFIX: Record<string, string> = {
+  admin:   "/admin",
+  teacher: "/teacher",
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function getStudentCookieSession(req: NextRequest) {
+  try {
+    const token = req.cookies.get("student_session")?.value;
+    if (!token) return null;
+    const secret = new TextEncoder().encode(process.env.BETTER_AUTH_SECRET!);
+    const { payload } = await jwtVerify(token, secret);
+    return payload as any;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Middleware ───────────────────────────────────────────────────────────────
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // ── Fully public paths ────────────────────────────────────────────────────
+  if (
+    pathname.startsWith("/apply") ||       // apply form, apply/login, apply/forgot-password
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/student-login") ||
+    pathname.startsWith("/api/auth") ||
+    pathname === "/"
+  ) {
+    return NextResponse.next();
+  }
+
+  // ── Admission portal (/admission/*) — guarded by student_session cookie ─────
+  // Separate from the student panel; for applicants who have not yet enrolled.
+  if (pathname.startsWith("/admission")) {
+    const admissionSession = await getStudentCookieSession(req);
+    if (!admissionSession) {
+      const dest = new URL("/apply/login", req.url);
+      dest.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(dest);
+    }
+    const headers = new Headers(req.headers);
+    headers.set("x-user-id",       admissionSession.id          ?? "");
+    headers.set("x-user-role",     "student");
+    headers.set("x-username",      admissionSession.username     ?? "");
+    headers.set("x-laravel-token", admissionSession.laravelToken ?? "");
+    return NextResponse.next({ request: { headers } });
+  }
+
+  // ── Student panel (/student/*) — guarded by student_session cookie ────────
+  // For enrolled students only (separate from admission portal).
+  if (pathname.startsWith("/student")) {
+    const studentSession = await getStudentCookieSession(req);
+    if (!studentSession) {
+      const dest = new URL("/student-login", req.url);
+      dest.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(dest);
+    }
+    const headers = new Headers(req.headers);
+    headers.set("x-user-id",       studentSession.id            ?? "");
+    headers.set("x-user-role",     "student");
+    headers.set("x-username",      studentSession.username       ?? "");
+    headers.set("x-laravel-token", studentSession.laravelToken   ?? "");
+    return NextResponse.next({ request: { headers } });
+  }
+
+  // ── Staff panels (/admin, /teacher) — guarded by Better Auth session ──────
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/teacher")
+  ) {
+    const session = await auth.api.getSession({ headers: req.headers });
+
+    if (!session) {
+      const dest = new URL("/login", req.url);
+      dest.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(dest);
+    }
+
+    const user = session.user as any;
+    const role: string = user.role ?? "";
+    const allowedPrefix = STAFF_ROLE_PREFIX[role];
+
+    // Wrong panel for this role → send to correct home
+    if (!allowedPrefix || !pathname.startsWith(allowedPrefix)) {
+      const home = STAFF_ROLE_HOME[role] ?? "/login";
+      return NextResponse.redirect(new URL(home, req.url));
+    }
+
+    const headers = new Headers(req.headers);
+    headers.set("x-user-id",       user.id             ?? "");
+    headers.set("x-user-role",     role);
+    headers.set("x-laravel-token", user.laravelToken    ?? "");
+    return NextResponse.next({ request: { headers } });
+  }
+
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/).*)"],
+};
