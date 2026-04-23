@@ -95,6 +95,15 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/teacher")
   ) {
+    // DEV_OPEN_STAFF=true bypasses auth so panels are explorable without a backend
+    if (process.env.DEV_OPEN_STAFF === "true") {
+      const headers = new Headers(req.headers);
+      headers.set("x-user-id",       "dev-admin");
+      headers.set("x-user-role",     "admin");
+      headers.set("x-laravel-token", "dev-token");
+      return NextResponse.next({ request: { headers } });
+    }
+
     const session = await auth.api.getSession({ headers: req.headers });
 
     if (!session) {

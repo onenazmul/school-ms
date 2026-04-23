@@ -82,7 +82,18 @@ export type AuthUser = {
   laravelToken: string;
 };
 
+const DEV_MOCK_SESSION: { user: AuthUser } = {
+  user: {
+    id: "dev-admin",
+    email: "admin@school.edu",
+    name: "Dev Admin",
+    role: "admin",
+    laravelToken: "dev-token",
+  },
+};
+
 export async function getServerSession() {
+  if (process.env.DEV_OPEN_STAFF === "true") return DEV_MOCK_SESSION;
   const cookieStore = await cookies();
   const session = await auth.api.getSession({
     headers: new Headers({ cookie: cookieStore.toString() }),
