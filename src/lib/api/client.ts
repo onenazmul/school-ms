@@ -66,8 +66,12 @@ async function request<T>(
 }
 
 export const api = {
-  get: <T>(endpoint: string, token?: string, signal?: AbortSignal) =>
-    request<T>(endpoint, { token, signal }),
+  get: <T>(
+    endpoint: string,
+    token?: string,
+    params?: Record<string, string | number | boolean | null | undefined>,
+    signal?: AbortSignal,
+  ) => request<T>(endpoint, { token, params, signal }),
 
   post: <T>(endpoint: string, body: unknown, token?: string) =>
     request<T>(endpoint, { method: "POST", body, token }),

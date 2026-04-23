@@ -29,6 +29,7 @@ export const EP = {
 
   // Admission
   APPLY: "/admission",
+  ADMISSIONS: "/admission",
   ADMISSION: (id: string | number) => `/admission/${id}`,
   STUDENT_LOGIN: "/admission/login",
   ADMISSION_PAYMENT: (id: string | number) => `/admission/${id}/payment`,

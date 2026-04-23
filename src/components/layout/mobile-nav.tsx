@@ -37,7 +37,19 @@ const MOBILE_NAV: Record<string, NavItem[]> = {
 export function MobileNav() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const role = (session?.user as any)?.role as string;
+
+  // Fall back to pathname-derived role when session is null (DEV_OPEN_STAFF mode)
+  const sessionRole = (session?.user as any)?.role as string | undefined;
+  const role: string =
+    sessionRole ??
+    (pathname.startsWith("/admin")
+      ? "admin"
+      : pathname.startsWith("/teacher")
+      ? "teacher"
+      : pathname.startsWith("/student")
+      ? "student"
+      : "");
+
   const items = MOBILE_NAV[role] ?? [];
 
   if (!items.length) return null;

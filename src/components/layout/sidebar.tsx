@@ -20,44 +20,61 @@ import {
   ChevronLeft,
   Menu,
   FileText,
-  CreditCard,
   ListTodo,
-  Building2,
   UserCircle,
+  ClipboardList,
+  BarChart3,
+  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Separator } from "@/components/ui/separator";
 
-type NavItem = {
+// ── Nav types ─────────────────────────────────────────────────────────────────
+
+type NavLink = {
+  kind?: "link";
   label: string;
   href: string;
   icon: React.ElementType;
   badge?: number;
 };
 
+type NavDivider = {
+  kind: "divider";
+  label: string;
+};
+
+type NavItem = NavLink | NavDivider;
+
+// ── Nav definitions ───────────────────────────────────────────────────────────
+
 const NAV: Record<string, NavItem[]> = {
   admin: [
-    { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-    { label: "Students", href: "/admin/students", icon: GraduationCap },
-    { label: "Teachers", href: "/admin/teachers", icon: Users },
-    { label: "Classes", href: "/admin/classes", icon: BookOpen },
-    { label: "Fee Config", href: "/admin/finance/fee-config", icon: Settings },
-    { label: "Bulk Billing", href: "/admin/finance/bulk-billing", icon: ListTodo },
-    { label: "Ledger", href: "/admin/finance/ledger", icon: DollarSign },
-    { label: "Receipts", href: "/admin/finance/receipts", icon: Receipt },
+    { label: "Dashboard",   href: "/admin/dashboard",   icon: LayoutDashboard },
+    { label: "Admissions",  href: "/admin/admissions",  icon: ClipboardList },
+    { label: "Students",    href: "/admin/students",    icon: GraduationCap },
+    { label: "Teachers",    href: "/admin/teachers",    icon: Users },
+    { label: "Classes",     href: "/admin/classes",     icon: BookOpen },
+    { kind: "divider", label: "Finance" },
+    { label: "Fee Config",    href: "/admin/finance/fee-config",   icon: Settings },
+    { label: "Bulk Billing",  href: "/admin/finance/bulk-billing", icon: ListTodo },
+    { label: "Ledger",        href: "/admin/finance/ledger",       icon: Wallet },
+    { label: "Receipts",      href: "/admin/finance/receipts",     icon: Receipt },
+    { kind: "divider", label: "More" },
+    { label: "Reports",   href: "/admin/reports",   icon: BarChart3 },
+    { label: "Settings",  href: "/admin/settings",  icon: Settings },
   ],
   teacher: [
-    { label: "Dashboard", href: "/teacher/dashboard", icon: LayoutDashboard },
-    { label: "My Classes", href: "/teacher/classes", icon: BookOpen },
-    { label: "Students", href: "/teacher/students", icon: GraduationCap },
-    { label: "Attendance", href: "/teacher/attendance", icon: ListTodo },
+    { label: "Dashboard",   href: "/teacher/dashboard",  icon: LayoutDashboard },
+    { label: "My Classes",  href: "/teacher/classes",    icon: BookOpen },
+    { label: "Students",    href: "/teacher/students",   icon: GraduationCap },
+    { label: "Attendance",  href: "/teacher/attendance", icon: ListTodo },
   ],
   student: [
-    { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
-    { label: "My Ledger", href: "/student/ledger", icon: DollarSign },
-    { label: "Fee Receipts", href: "/student/receipts", icon: Receipt },
-    { label: "Profile", href: "/student/profile", icon: UserCircle },
+    { label: "Dashboard",    href: "/student/dashboard", icon: LayoutDashboard },
+    { label: "My Ledger",    href: "/student/ledger",    icon: DollarSign },
+    { label: "Fee Receipts", href: "/student/receipts",  icon: Receipt },
+    { label: "Profile",      href: "/student/profile",   icon: UserCircle },
   ],
 };
 
@@ -67,9 +84,23 @@ export function Sidebar() {
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
 
-  const role = (session?.user as any)?.role as string;
-  const user = session?.user;
+  // Derive role from session; fall back to pathname for DEV_OPEN_STAFF mode
+  // (middleware bypasses Better Auth in dev, so useSession() returns null)
+  const sessionRole = (session?.user as any)?.role as string | undefined;
+  const role: string =
+    sessionRole ??
+    (pathname.startsWith("/admin")
+      ? "admin"
+      : pathname.startsWith("/teacher")
+      ? "teacher"
+      : pathname.startsWith("/student")
+      ? "student"
+      : "");
+
   const navItems = NAV[role] ?? [];
+
+  // In dev mode the session user is null — show a placeholder
+  const user = session?.user ?? (role ? { name: "Dev " + role, email: "" } : null);
 
   const initials = user?.name
     ?.split(" ")
@@ -118,8 +149,22 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-        {navItems.map((item) => {
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+        {navItems.map((item, idx) => {
+          // Section divider
+          if (item.kind === "divider") {
+            return collapsed ? (
+              <div key={`div-${idx}`} className="my-2 mx-2 border-t" />
+            ) : (
+              <div key={`div-${idx}`} className="pt-3 pb-1 px-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                  {item.label}
+                </p>
+              </div>
+            );
+          }
+
+          // Regular link
           const Icon = item.icon;
           const active =
             pathname === item.href || pathname.startsWith(item.href + "/");
@@ -135,9 +180,7 @@ export function Sidebar() {
               )}
               title={collapsed ? item.label : undefined}
             >
-              <Icon
-                className={cn("size-4 shrink-0", active && "text-indigo-600")}
-              />
+              <Icon className={cn("size-4 shrink-0", active && "text-indigo-600")} />
               {!collapsed && <span>{item.label}</span>}
               {!collapsed && item.badge != null && (
                 <span className="ml-auto text-xs bg-indigo-100 text-indigo-700 rounded-full px-1.5 py-0.5 font-medium">
