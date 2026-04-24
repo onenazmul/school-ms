@@ -7,7 +7,14 @@
       "Bash(git -C /Users/nazmul/Documents/next/school-ms gc --prune=now --aggressive)",
       "Bash(git -C /Users/nazmul/Documents/next/school-ms log --oneline)",
       "Bash(git -C /Users/nazmul/Documents/next/school-ms reflog expire --expire=now --all)",
-      "Bash(git -C /Users/nazmul/Documents/next/school-ms gc --prune=now)"
+      "Bash(git -C /Users/nazmul/Documents/next/school-ms gc --prune=now)",
+      "Bash(npm install *)",
+      "Bash(mkdir -p /Users/nazmul/Documents/next/school-ms/src/app/api/documents/id-card/\\\\[studentId\\\\])",
+      "Bash(mkdir -p /Users/nazmul/Documents/next/school-ms/src/app/api/documents/result-card/\\\\[studentId\\\\])",
+      "Bash(mkdir -p /Users/nazmul/Documents/next/school-ms/src/app/api/documents/admit-card/\\\\[studentId\\\\])"
+    ],
+    "additionalDirectories": [
+      "/Users/nazmul/Documents/next/school-ms/src/lib"
     ]
   }
 }

@@ -25,6 +25,7 @@ import {
   ClipboardList,
   BarChart3,
   Wallet,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -61,6 +62,7 @@ const NAV: Record<string, NavItem[]> = {
     { label: "Ledger",        href: "/admin/finance/ledger",       icon: Wallet },
     { label: "Receipts",      href: "/admin/finance/receipts",     icon: Receipt },
     { kind: "divider", label: "More" },
+    { label: "Documents", href: "/admin/documents", icon: Download },
     { label: "Reports",   href: "/admin/reports",   icon: BarChart3 },
     { label: "Settings",  href: "/admin/settings",  icon: Settings },
   ],
