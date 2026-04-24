@@ -10,13 +10,14 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { StudentSession } from "@/lib/auth/student";
 import {
   LayoutDashboard, DollarSign, Receipt, UserCircle,
-  ChevronLeft, Menu, LogOut,
+  ChevronLeft, Menu, LogOut, BookOpen,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
   { label: "My Ledger",  href: "/student/ledger",   icon: DollarSign      },
   { label: "Receipts",   href: "/student/receipts",  icon: Receipt         },
+  { label: "Exam Fees",  href: "/student/payments",  icon: BookOpen        },
   { label: "Profile",    href: "/student/profile",   icon: UserCircle      },
 ];
 

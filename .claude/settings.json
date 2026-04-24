@@ -14,7 +14,8 @@
       "Bash(mkdir -p /Users/nazmul/Documents/next/school-ms/src/app/api/documents/admit-card/\\\\[studentId\\\\])"
     ],
     "additionalDirectories": [
-      "/Users/nazmul/Documents/next/school-ms/src/lib"
+      "/Users/nazmul/Documents/next/school-ms/src/lib",
+      "/Users/nazmul/Documents/next/school-ms/src/app/api/documents/payment-receipt"
     ]
   }
 }

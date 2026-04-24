@@ -61,6 +61,7 @@ const NAV: Record<string, NavItem[]> = {
     { label: "Bulk Billing",  href: "/admin/finance/bulk-billing", icon: ListTodo },
     { label: "Ledger",        href: "/admin/finance/ledger",       icon: Wallet },
     { label: "Receipts",      href: "/admin/finance/receipts",     icon: Receipt },
+    { label: "Payments",      href: "/admin/admissions/payments",  icon: DollarSign },
     { kind: "divider", label: "More" },
     { label: "Documents", href: "/admin/documents", icon: Download },
     { label: "Reports",   href: "/admin/reports",   icon: BarChart3 },

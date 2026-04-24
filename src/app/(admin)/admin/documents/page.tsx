@@ -26,11 +26,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Download, FileText, CreditCard, GraduationCap, Search, Eye,
   Loader2, AlertTriangle, Users, X, Archive, BookOpen, Info,
+  Receipt, CheckCircle2, Clock, XCircle,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 import type { DocumentStudent } from "@/lib/mock-data/documents";
 import { MOCK_STUDENTS, SCHOOL_INFO } from "@/lib/mock-data/documents";
+import type { PaymentSubmission } from "@/lib/mock-data/payments";
+import { MOCK_PAYMENT_SUBMISSIONS } from "@/lib/mock-data/payments";
+import { formatBDT, fmtDate } from "@/lib/utils/format";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -553,6 +557,196 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// PaymentReceiptsTab
+// ─────────────────────────────────────────────────────────────────────────────
+
+function receiptStatusBadge(status: PaymentSubmission["status"]) {
+  switch (status) {
+    case "verified":     return { label: "Verified",     cls: "bg-green-50 text-green-700 border-green-200",  icon: CheckCircle2 };
+    case "pending":      return { label: "Pending",      cls: "bg-amber-50 text-amber-700 border-amber-200",  icon: Clock };
+    case "under_review": return { label: "Under Review", cls: "bg-blue-50 text-blue-700 border-blue-200",    icon: Clock };
+    case "rejected":     return { label: "Rejected",     cls: "bg-red-50 text-red-700 border-red-200",       icon: XCircle };
+  }
+}
+
+function contextLabel(sub: PaymentSubmission) {
+  if (sub.paymentContext === "admission") return `Admission — ${sub.applicationId ?? ""}`;
+  return `Exam Fee — ${sub.examFeeId ?? ""}`;
+}
+
+function PaymentReceiptsTab() {
+  const [query, setQuery] = useState("");
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const filtered = MOCK_PAYMENT_SUBMISSIONS.filter((s) => {
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
+    return (
+      s.id.toLowerCase().includes(q) ||
+      (s.applicationId ?? "").toLowerCase().includes(q) ||
+      (s.examFeeId ?? "").toLowerCase().includes(q) ||
+      (s.transactionId ?? "").toLowerCase().includes(q) ||
+      (s.receiptNumber ?? "").toLowerCase().includes(q)
+    );
+  });
+
+  async function handleDownload(sub: PaymentSubmission) {
+    setDownloading(sub.id);
+    try {
+      await downloadBlob(
+        `/api/documents/payment-receipt/${sub.id}`,
+        `Receipt-${sub.receiptNumber ?? sub.id}.pdf`
+      );
+      toast.success(`Receipt downloaded for ${sub.id}`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Download failed");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <Receipt className="size-5 shrink-0 text-violet-600" />
+        <div>
+          <p className="font-semibold">Payment Receipts</p>
+          <p className="text-xs text-muted-foreground">Download verified payment receipts for admission and exam fee submissions</p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+        <Input
+          className="pl-9 pr-9 h-10 text-sm"
+          placeholder="Search by submission ID, application ID, TxnID…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block rounded-xl border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Submission</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Context</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Amount</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                  No submissions match your search.
+                </td>
+              </tr>
+            ) : (
+              filtered.map((sub) => {
+                const badge = receiptStatusBadge(sub.status);
+                const BadgeIcon = badge.icon;
+                const isVerified = sub.status === "verified";
+                const isDownloading = downloading === sub.id;
+                return (
+                  <tr key={sub.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-mono text-xs font-medium">{sub.id}</p>
+                      {sub.receiptNumber && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{sub.receiptNumber}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{contextLabel(sub)}</td>
+                    <td className="px-4 py-3 font-semibold">{formatBDT(sub.amountSent)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(sub.paymentDate)}</td>
+                    <td className="px-4 py-3">
+                      <span className={cn("inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border font-medium", badge.cls)}>
+                        <BadgeIcon className="size-3" />
+                        {badge.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        size="sm"
+                        variant={isVerified ? "default" : "outline"}
+                        className={cn("gap-1.5 text-xs", isVerified && "bg-violet-600 hover:bg-violet-700 text-white")}
+                        disabled={!isVerified || isDownloading}
+                        onClick={() => handleDownload(sub)}
+                      >
+                        {isDownloading
+                          ? <><Loader2 className="size-3 animate-spin" />Downloading…</>
+                          : <><Download className="size-3" />{isVerified ? "Download" : "Not verified"}</>}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
+            No submissions match your search.
+          </div>
+        ) : (
+          filtered.map((sub) => {
+            const badge = receiptStatusBadge(sub.status);
+            const BadgeIcon = badge.icon;
+            const isVerified = sub.status === "verified";
+            const isDownloading = downloading === sub.id;
+            return (
+              <div key={sub.id} className="rounded-xl border bg-background p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-mono text-xs font-semibold">{sub.id}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{contextLabel(sub)}</p>
+                  </div>
+                  <span className={cn("inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border font-medium shrink-0", badge.cls)}>
+                    <BadgeIcon className="size-3" />
+                    {badge.label}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{fmtDate(sub.paymentDate)}</span>
+                  <span className="font-semibold">{formatBDT(sub.amountSent)}</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant={isVerified ? "default" : "outline"}
+                  className={cn("w-full gap-2", isVerified && "bg-violet-600 hover:bg-violet-700 text-white")}
+                  disabled={!isVerified || isDownloading}
+                  onClick={() => handleDownload(sub)}
+                >
+                  {isDownloading
+                    ? <><Loader2 className="size-3.5 animate-spin" />Downloading…</>
+                    : <><Download className="size-3.5" />{isVerified ? "Download Receipt" : "Not verified"}</>}
+                </Button>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // DocumentTab — wraps both panels for one doc type
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -639,6 +833,11 @@ export default function DocumentsPage() {
               </TabsTrigger>
             );
           })}
+          <TabsTrigger value="receipts" className="gap-2 text-sm px-4">
+            <Receipt className="size-3.5" />
+            <span className="hidden sm:inline">Receipts</span>
+            <span className="sm:hidden">Rec.</span>
+          </TabsTrigger>
         </TabsList>
 
         {(Object.keys(DOC_META) as DocType[]).map((docType) => (
@@ -646,6 +845,10 @@ export default function DocumentsPage() {
             <DocumentTab docType={docType} />
           </TabsContent>
         ))}
+
+        <TabsContent value="receipts">
+          <PaymentReceiptsTab />
+        </TabsContent>
       </Tabs>
     </div>
   );

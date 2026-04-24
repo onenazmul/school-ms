@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { useStudentSession } from "@/lib/auth/student-client";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api/client";
 import { EP } from "@/lib/api/endpoints";
 import { Button } from "@/components/ui/button";
@@ -69,9 +70,9 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
 
 export default function ApplicationPage() {
   const { session, loading: sessionLoading } = useStudentSession();
+  const router = useRouter();
   const [admission, setAdmission] = useState<Admission | null>(null);
   const [fetching, setFetching]   = useState(true);
-  const [payLoading, setPayLoading] = useState(false);
 
   useEffect(() => {
     if (!session?.id || sessionLoading) return;
@@ -83,25 +84,8 @@ export default function ApplicationPage() {
       .finally(() => setFetching(false));
   }, [session, sessionLoading]);
 
-  async function handlePayNow() {
-    if (!session || !admission) return;
-    setPayLoading(true);
-    try {
-      const res = await api.post<{ payment_url?: string; message?: string }>(
-        EP.ADMISSION_PAYMENT(admission.id),
-        { amount: APPLICATION_FEE, admission_id: admission.id },
-        session.laravelToken
-      );
-      if (res.payment_url) {
-        window.location.href = res.payment_url;
-      } else {
-        toast.info(res.message ?? "Online payment coming soon. Please pay at the school office.");
-      }
-    } catch {
-      toast.info("Online payment coming soon. Please pay at the school office.");
-    } finally {
-      setPayLoading(false);
-    }
+  function handlePayNow() {
+    router.push("/admission/application/payment");
   }
 
   if (sessionLoading || fetching) {
@@ -204,13 +188,8 @@ export default function ApplicationPage() {
             <Button
               className="w-full h-12 text-base bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold"
               onClick={handlePayNow}
-              disabled={payLoading}
             >
-              {payLoading ? (
-                <><span className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Processing…</>
-              ) : (
-                <><CreditCard className="size-5" />Pay Application Fee — ৳{APPLICATION_FEE}</>
-              )}
+              <CreditCard className="size-5" />Pay Application Fee — ৳{APPLICATION_FEE}
             </Button>
             <Button variant="outline" className="w-full gap-2" asChild>
               <a href="/admission/application/edit">
