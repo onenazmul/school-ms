@@ -1,78 +1,51 @@
 "use server";
 // lib/actions/admission.ts
-// Server action for admission form submission.
-// Runs server-side → no CORS, no CSRF token required.
-
-import type { AdmissionInput } from "@/lib/schemas";
 
 const API_BASE = process.env.API_URL ?? "https://sms-api.chalanbeel.com";
 const TENANT   = process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "school1.com";
 
 export type AdmissionRecord = {
   id: number;
-  name: string;
+  // new API fields
+  name_en?: string;
+  // legacy field – some API versions return this
+  name?: string;
   class_name: string;
   gender: string;
   dob: string;
-  stay_type: string;
-  father_name: string;
-  mother_name: string;
-  guardian_name: string;
-  guardian_phone: string;
-  guardian_email: string | null;
-  guardian_occupation: string | null;
-  upozilla: string;
-  union_pourosova: string;
-  ward: string;
-  village_moholla: string;
+  guardian_name?: string;
+  guardian_mobile_no?: string;
+  // legacy
+  guardian_phone?: string;
   username: string;
-  password_text: string;
-  application_fee: string;
-  payment_tracking_id: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
+  password_text?: string;
+  application_fee?: string;
+  payment_tracking_id?: string | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
 };
 
 export type SubmitResult =
   | { success: true; admission: AdmissionRecord; token: string }
   | { success: false; message: string };
 
-export async function submitAdmission(values: AdmissionInput): Promise<SubmitResult> {
-  const params = new URLSearchParams({
-    name:                   values.name,
-    class_name:             values.class_name,
-    gender:                 values.gender,
-    dob:                    values.dob,
-    stay_type:              values.stay_type,
-    father_name:            values.father_name,
-    mother_name:            values.mother_name,
-    guardian_name:          values.guardian_name,
-    guardian_phone:         values.guardian_phone,
-    upozilla:               values.upozilla,
-    union_pourosova:        values.union_pourosova,
-    ward:                   values.ward,
-    village_moholla:        values.village_moholla,
-    student_photo_path:     "n/a",
-    birth_certificate_path: "n/a",
-    // status:                 "Active",
-    application_fee:        "100",
-    // payment_tracking_id:    "4",
-  });
-
-  if (values.guardian_email)      params.set("guardian_email",      values.guardian_email);
-  if (values.guardian_occupation) params.set("guardian_occupation",  values.guardian_occupation);
+export async function submitAdmission(formData: FormData): Promise<SubmitResult> {
+  formData.delete("confirm_password");
+  if (!formData.get("application_fee")) formData.set("application_fee", "100");
 
   let res: Response;
   let data: any;
 
   try {
-    res = await fetch(`${API_BASE}/api/admission?${params.toString()}`, {
+    res = await fetch(`${API_BASE}/api/admission`, {
       method: "POST",
       headers: {
         Accept: "application/json",
         "X-Tenant-Domain": TENANT,
       },
+      body: formData,
       cache: "no-store",
     });
   } catch (err) {
@@ -95,13 +68,11 @@ export async function submitAdmission(values: AdmissionInput): Promise<SubmitRes
     return { success: false, message: data?.message ?? `Request failed (HTTP ${res.status}).` };
   }
 
-  // API returns { admission: {...}, token: "..." }
-  // Normalise: some responses wrap under "admission", some return the record directly
   const record: AdmissionRecord | undefined =
     data?.admission?.id !== undefined
-      ? data.admission            // { admission: { id, ... }, token }
+      ? data.admission
       : data?.id !== undefined
-      ? data                      // { id, username, ..., token }
+      ? data
       : undefined;
 
   const token: string | undefined = data?.token ?? data?.admission?.token;
