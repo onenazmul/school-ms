@@ -307,7 +307,10 @@ export default function ApplyPage() {
         toast.error("Application submitted but response was incomplete. Please contact the school.");
         return;
       }
-      await studentSignInFromAdmission(result.admission, result.token);
+      await studentSignInFromAdmission(
+        { ...result.admission, name: result.admission.name_en ?? result.admission.name ?? result.admission.username },
+        result.token,
+      );
       setAdmission(result.admission);
     } catch (err: any) {
       toast.error(err.message ?? "Submission failed. Please try again.");
