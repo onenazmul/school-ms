@@ -49,6 +49,7 @@ export type PaymentPageContext = {
   feeDescription: string;
   backHref: string;
   existingSubmissions?: PaymentSubmission[];
+  onSubmitPayment?: (values: PaymentFormValues) => Promise<void>;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ const paymentSchema = z.object({
   }
 });
 
-type PaymentFormValues = z.infer<typeof paymentSchema>;
+export type PaymentFormValues = z.infer<typeof paymentSchema>;
 
 type MethodKey = "bkash" | "rocket" | "bank_transfer";
 
@@ -521,10 +522,12 @@ export function PaymentPage({ ctx }: { ctx: PaymentPageContext }) {
     }
     setSubmitting(true);
     try {
-      // TODO: replace with real API call
-      // POST /api/applications/:id/payment-submissions  (admission)
-      // POST /api/students/:id/exam-fees/:feeId/submissions  (exam_fee)
-      await new Promise((r) => setTimeout(r, 1200));
+      if (ctx.onSubmitPayment) {
+        await ctx.onSubmitPayment(values);
+      } else {
+        // fallback mock for non-admission contexts
+        await new Promise((r) => setTimeout(r, 1200));
+      }
 
       const newSub: PaymentSubmission = {
         id: `PS-${Date.now()}`,
@@ -547,8 +550,8 @@ export function PaymentPage({ ctx }: { ctx: PaymentPageContext }) {
       setSubmitted(newSub);
       setShowForm(false);
       toast.success("Payment proof submitted! Admin will verify within 1–2 business days.");
-    } catch {
-      toast.error("Submission failed. Please try again.");
+    } catch (err: unknown) {
+      toast.error((err as Error).message ?? "Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
     }

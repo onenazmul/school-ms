@@ -33,6 +33,7 @@ export const EP = {
   ADMISSION: (id: string | number) => `/admission/${id}`,
   STUDENT_LOGIN: "/admission/login",
   ADMISSION_PAYMENT: (id: string | number) => `/admission/${id}/payment`,
+  ADMISSION_PAY: "/admission/payment",
 
   // Dashboard
   ADMIN_STATS: "/dashboard/admin",

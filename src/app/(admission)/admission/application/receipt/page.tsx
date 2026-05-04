@@ -1,5 +1,4 @@
 "use client";
-// app/(admission)/admission/application/receipt/page.tsx
 
 import { useEffect, useState } from "react";
 import { useStudentSession } from "@/lib/auth/student-client";
@@ -8,30 +7,51 @@ import { EP } from "@/lib/api/endpoints";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Printer, ChevronLeft, CheckCircle2, GraduationCap, AlertCircle } from "lucide-react";
+import {
+  Printer, ChevronLeft, CheckCircle2, GraduationCap, AlertCircle,
+} from "lucide-react";
 
-const SCHOOL_NAME    = "Bright Future School";
+const SCHOOL_NAME    = "Markazul Hifz International Cadet Madrasah";
 const SCHOOL_ADDRESS = "Sirajganj, Rajshahi, Bangladesh";
 const SCHOOL_PHONE   = "01XXXXXXXXX";
-const SCHOOL_EMAIL   = "info@brightfutureschool.edu.bd";
-const APPLICATION_FEE = 100;
+const SCHOOL_EMAIL   = "info@school.edu.bd";
 
 type Admission = {
-  id: number; name: string; class_name: string; gender: string; dob: string;
-  upozilla: string; union_pourosova: string; ward: string; village_moholla: string;
-  guardian_name: string; guardian_phone: string; application_fee: string;
-  payment_tracking_id: string | null; username: string;
-  created_at: string; updated_at: string;
+  id: number;
+  name_en: string;
+  name_bn: string | null;
+  dob: string;
+  gender: string;
+  class_name: string;
+  session_name: string | null;
+  division: string | null;
+
+  present_village: string | null;
+  present_upazilla: string | null;
+  present_zilla: string | null;
+
+  guardian_name: string | null;
+  guardian_mobile_no: string | null;
+
+  application_fee: string;
+  payment_tracking_id: string | null;
+  username: string;
+  created_at: string;
+  updated_at: string;
 };
 
 function isPaid(a: Admission) {
-  return a.payment_tracking_id !== null &&
+  return (
+    a.payment_tracking_id !== null &&
     a.payment_tracking_id !== "4" &&
-    a.payment_tracking_id !== "";
+    a.payment_tracking_id !== ""
+  );
 }
 
 function fmt(iso: string) {
-  return new Date(iso).toLocaleDateString("en-BD", { day: "2-digit", month: "long", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-BD", {
+    day: "2-digit", month: "long", year: "numeric",
+  });
 }
 
 function Row({ label, value }: { label: string; value?: string | null }) {
@@ -46,7 +66,7 @@ function Row({ label, value }: { label: string; value?: string | null }) {
 export default function ReceiptPage() {
   const { session, loading: sessionLoading } = useStudentSession();
   const [admission, setAdmission] = useState<Admission | null>(null);
-  const [fetching, setFetching]   = useState(true);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!session?.id || sessionLoading) return;
@@ -75,10 +95,13 @@ export default function ReceiptPage() {
           <div>
             <h2 className="font-semibold">No Receipt Yet</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              A receipt will appear here after the application fee is paid.
+              A receipt will appear here after the application fee has been verified.
             </p>
           </div>
           <Button asChild variant="outline">
+            <a href="/admission/application/payment">Check Payment Status</a>
+          </Button>
+          <Button asChild variant="ghost">
             <a href="/admission/application">← Back to Application</a>
           </Button>
         </div>
@@ -87,15 +110,21 @@ export default function ReceiptPage() {
   }
 
   const address = [
-    admission.village_moholla, `Ward ${admission.ward}`,
-    admission.union_pourosova, admission.upozilla,
+    admission.present_village,
+    admission.present_upazilla,
+    admission.present_zilla,
   ].filter(Boolean).join(", ");
+
+  const applicationFee = Number(admission.application_fee) || 100;
 
   return (
     <div className="space-y-4 pt-2">
       {/* Toolbar */}
       <div className="flex items-center justify-between print:hidden">
-        <a href="/admission/application" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <a
+          href="/admission/application"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
           <ChevronLeft className="size-4" /> Back
         </a>
         <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-2">
@@ -121,31 +150,38 @@ export default function ReceiptPage() {
             <CheckCircle2 className="size-4 text-green-600" />
             <span className="text-sm font-semibold text-green-800">Application Fee Receipt</span>
           </div>
-          <span className="text-xs text-green-700">Ref: {admission.payment_tracking_id}</span>
+          <span className="text-xs text-green-700 font-mono">
+            Ref: {admission.payment_tracking_id}
+          </span>
         </div>
 
         {/* Body */}
         <div className="px-6 py-5 space-y-5">
           {/* Applicant info */}
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Applicant Information</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Applicant Information
+            </p>
             <table className="w-full">
               <tbody>
                 <Row label="Application ID"  value={admission.username} />
-                <Row label="Student Name"    value={admission.name} />
-                <Row label="Applied Class"   value={admission.class_name} />
+                <Row label="Student Name"    value={admission.name_en} />
+                {admission.name_bn && <Row label="নাম (বাংলা)" value={admission.name_bn} />}
+                <Row label="Applied Class"   value={[admission.class_name, admission.session_name, admission.division].filter(Boolean).join(" · ")} />
                 <Row label="Gender"          value={admission.gender} />
                 <Row label="Date of Birth"   value={admission.dob} />
                 <Row label="Address"         value={address} />
                 <Row label="Guardian"        value={admission.guardian_name} />
-                <Row label="Guardian Phone"  value={admission.guardian_phone} />
+                <Row label="Guardian Mobile" value={admission.guardian_mobile_no} />
               </tbody>
             </table>
           </div>
 
           {/* Payment info */}
           <div className="rounded-xl bg-muted/50 border p-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Payment Details</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Payment Details
+            </p>
             <table className="w-full">
               <tbody>
                 <Row label="Payment Date"  value={fmt(admission.updated_at)} />
@@ -155,14 +191,16 @@ export default function ReceiptPage() {
             </table>
             <div className="border-t mt-3 pt-3 flex items-center justify-between">
               <span className="text-sm font-semibold">Total Paid</span>
-              <span className="text-lg font-bold text-green-700">৳{APPLICATION_FEE}.00</span>
+              <span className="text-lg font-bold text-green-700">৳{applicationFee}.00</span>
             </div>
           </div>
 
           {/* Stamp */}
           <div className="flex items-center justify-center gap-2 py-2 border rounded-xl bg-green-50 text-green-700">
             <CheckCircle2 className="size-4" />
-            <span className="text-sm font-semibold">Payment Confirmed — Application Under Review</span>
+            <span className="text-sm font-semibold">
+              Payment Confirmed — Application Under Review
+            </span>
           </div>
 
           <p className="text-[11px] text-muted-foreground text-center leading-relaxed">

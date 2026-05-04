@@ -16,7 +16,7 @@ import {
 
 type Admission = {
   id: number;
-  name: string;
+  name_en: string;
   class_name: string;
   gender: string;
   dob: string;
@@ -26,8 +26,6 @@ type Admission = {
   username: string;
   created_at: string;
 };
-
-const APPLICATION_FEE = 100;
 
 function isPaid(a: Admission) {
   return a.payment_tracking_id !== null &&
@@ -82,13 +80,14 @@ export default function AdmissionDashboard() {
 
   const paid  = isPaid(admission);
   const sc    = statusConfig(admission.status);
+  const applicationFee = Number(admission.application_fee) || 100;
 
   return (
     <div className="space-y-5 pt-2">
       {/* Greeting */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold">Welcome, {admission.name.split(" ")[0]}</h1>
+          <h1 className="text-xl font-semibold">Welcome, {admission.name_en.split(" ")[0]}</h1>
           <p className="text-sm text-muted-foreground mt-0.5 font-mono">{admission.username}</p>
         </div>
         <Badge variant="outline" className={sc.cls}>{sc.label}</Badge>
@@ -134,7 +133,7 @@ export default function AdmissionDashboard() {
             <CheckCircle2 className="size-5 text-green-600 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-green-800">Fee Paid</p>
-              <p className="text-xs text-green-700">Application fee of ৳{APPLICATION_FEE} received.</p>
+              <p className="text-xs text-green-700">Application fee of ৳{applicationFee} received.</p>
             </div>
           </div>
           <Button size="sm" variant="outline" asChild className="shrink-0">
@@ -147,7 +146,7 @@ export default function AdmissionDashboard() {
             <Clock className="size-5 text-amber-600 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-amber-800">Payment Pending</p>
-              <p className="text-xs text-amber-700">Pay the ৳{APPLICATION_FEE} application fee to complete your submission.</p>
+              <p className="text-xs text-amber-700">Pay the ৳{applicationFee} application fee to complete your submission.</p>
             </div>
           </div>
           <Button
@@ -156,7 +155,7 @@ export default function AdmissionDashboard() {
           >
             <a href="/admission/application">
               <CreditCard className="size-4" />
-              Pay Application Fee — ৳{APPLICATION_FEE}
+              Pay Application Fee — ৳{applicationFee}
             </a>
           </Button>
         </div>

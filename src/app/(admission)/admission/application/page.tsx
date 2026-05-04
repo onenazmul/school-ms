@@ -1,5 +1,4 @@
 "use client";
-// app/(admission)/admission/application/page.tsx
 
 import { useEffect, useState } from "react";
 import { useStudentSession } from "@/lib/auth/student-client";
@@ -12,26 +11,55 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   CheckCircle2, Clock, CreditCard, Pencil, Printer,
-  GraduationCap, AlertCircle, RefreshCw,
+  GraduationCap, AlertCircle, RefreshCw, MapPin, Users, BookOpen,
 } from "lucide-react";
 
 type Admission = {
   id: number;
-  name: string;
-  class_name: string;
-  gender: string;
+  name_en: string;
+  name_bn: string | null;
+  name_ar: string | null;
   dob: string;
-  stay_type: string;
-  father_name: string;
-  mother_name: string;
-  guardian_name: string;
+  birth_certificate_no: string | null;
+  gender: string;
+  height: string | null;
+  weight: string | null;
+  age: string | null;
+  nationality: string | null;
+  blood_group: string | null;
+  identify_sign: string | null;
+
+  present_village: string | null;
+  present_post: string | null;
+  present_upazilla: string | null;
+  present_post_code: string | null;
+  present_zilla: string | null;
+
+  permanent_village: string | null;
+  permanent_post: string | null;
+  permanent_upazilla: string | null;
+  permanent_zilla: string | null;
+  permanent_post_code: string | null;
+
+  father_name_en: string | null;
+  father_name_bn: string | null;
+  father_occupation: string | null;
+  father_mobile_no: string | null;
+
+  mother_name_en: string | null;
+  mother_name_bn: string | null;
+  mother_mobile_no: string | null;
+
+  guardian_name: string | null;
+  guardian_student_relation: string | null;
+  guardian_mobile_no: string | null;
   guardian_occupation: string | null;
-  guardian_phone: string;
-  guardian_email: string | null;
-  upozilla: string;
-  union_pourosova: string;
-  ward: string;
-  village_moholla: string;
+
+  class_name: string;
+  session_name: string | null;
+  division: string | null;
+  previous_institute_name: string | null;
+
   status: string;
   application_fee: string;
   payment_tracking_id: string | null;
@@ -39,12 +67,12 @@ type Admission = {
   created_at: string;
 };
 
-const APPLICATION_FEE = 100;
-
 function isPaid(a: Admission) {
-  return a.payment_tracking_id !== null &&
+  return (
+    a.payment_tracking_id !== null &&
     a.payment_tracking_id !== "4" &&
-    a.payment_tracking_id !== "";
+    a.payment_tracking_id !== ""
+  );
 }
 
 function statusColor(s: string) {
@@ -61,9 +89,18 @@ function statusLabel(s: string) {
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="flex justify-between text-sm py-1.5 border-b last:border-0">
+    <div className="flex justify-between text-sm py-1.5 ">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className="font-medium text-right ml-4">{value || "—"}</span>
+    </div>
+  );
+}
+
+function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <Icon className="size-4 text-indigo-600" />
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{title}</p>
     </div>
   );
 }
@@ -72,7 +109,7 @@ export default function ApplicationPage() {
   const { session, loading: sessionLoading } = useStudentSession();
   const router = useRouter();
   const [admission, setAdmission] = useState<Admission | null>(null);
-  const [fetching, setFetching]   = useState(true);
+  const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!session?.id || sessionLoading) return;
@@ -84,15 +121,12 @@ export default function ApplicationPage() {
       .finally(() => setFetching(false));
   }, [session, sessionLoading]);
 
-  function handlePayNow() {
-    router.push("/admission/application/payment");
-  }
-
   if (sessionLoading || fetching) {
     return (
       <div className="space-y-4 pt-2">
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
         <Skeleton className="h-40 w-full rounded-xl" />
         <Skeleton className="h-32 w-full rounded-xl" />
         <Skeleton className="h-10 w-full rounded-lg" />
@@ -113,6 +147,23 @@ export default function ApplicationPage() {
   }
 
   const paid = isPaid(admission);
+  const applicationFee = Number(admission.application_fee) || 100;
+
+  const presentAddress = [
+    admission.present_village,
+    admission.present_post,
+    admission.present_upazilla,
+    admission.present_zilla,
+    admission.present_post_code,
+  ].filter(Boolean).join(", ");
+
+  const permanentAddress = [
+    admission.permanent_village,
+    admission.permanent_post,
+    admission.permanent_upazilla,
+    admission.permanent_zilla,
+    admission.permanent_post_code,
+  ].filter(Boolean).join(", ");
 
   return (
     <div className="space-y-5 pt-2">
@@ -131,7 +182,9 @@ export default function ApplicationPage() {
             <p className="text-sm font-semibold text-green-800">Application Fee Paid</p>
             <p className="text-xs text-green-700 mt-0.5">
               Your application is complete.{" "}
-              <a href="/admission/application/receipt" className="underline font-medium">View receipt →</a>
+              <a href="/admission/application/receipt" className="underline font-medium">
+                View receipt →
+              </a>
             </p>
           </div>
         </div>
@@ -141,7 +194,7 @@ export default function ApplicationPage() {
           <div>
             <p className="text-sm font-semibold text-amber-800">Payment Pending</p>
             <p className="text-xs text-amber-700 mt-0.5">
-              Pay ৳{APPLICATION_FEE} to complete your application.
+              Pay ৳{applicationFee} to complete your application.
             </p>
           </div>
         </div>
@@ -149,36 +202,84 @@ export default function ApplicationPage() {
 
       {/* Student details */}
       <div className="rounded-xl border bg-background p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <GraduationCap className="size-4 text-indigo-600" />
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Student Details</p>
+        <SectionHeader icon={GraduationCap} title="Student Details" />
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Name (English)"      value={admission.name_en} />
+          <InfoRow label="Name (Bengali)"       value={admission.name_bn} />
+          <InfoRow label="Name (Arabic)"        value={admission.name_ar} />
         </div>
-        <InfoRow label="Name"           value={admission.name} />
-        <InfoRow label="Applied Class"  value={admission.class_name} />
-        <InfoRow label="Gender"         value={admission.gender} />
-        <InfoRow label="Date of Birth"  value={admission.dob} />
-        <InfoRow label="Stay Type"      value={admission.stay_type} />
-        <InfoRow label="Application ID" value={admission.username} />
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Date of Birth"        value={admission.dob} />
+          <InfoRow label="Birth Certificate No" value={admission.birth_certificate_no} />
+        </div>
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Gender"               value={admission.gender} />
+          <InfoRow label="Age"                  value={admission.age} />
+          
+        </div>
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Nationality"          value={admission.nationality} />
+          <InfoRow label="Blood Group"          value={admission.blood_group} />
+        </div>
+        <div className="sm:flex sm:justify-between">
+          
+          <InfoRow label="Height"               value={admission.height} />
+          <InfoRow label="Weight"               value={admission.weight} />
+        </div>
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Identify Sign"        value={admission.identify_sign} />
+          <InfoRow label="Application ID"       value={admission.username} />
+        </div>
+      </div>
+
+      {/* Academic */}
+      <div className="rounded-xl border bg-background p-4">
+        <SectionHeader icon={BookOpen} title="Academic Details" />
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Applied Class"         value={admission.class_name} />
+          <InfoRow label="Session"               value={admission.session_name} />
+        </div>
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Division"              value={admission.division} />
+          <InfoRow label="Previous Institute"    value={admission.previous_institute_name} />
+        </div>
       </div>
 
       {/* Address */}
       <div className="rounded-xl border bg-background p-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Address</p>
-        <InfoRow label="Village/Moholla"  value={admission.village_moholla} />
-        <InfoRow label="Ward"             value={admission.ward} />
-        <InfoRow label="Union/Pouroshova" value={admission.union_pourosova} />
-        <InfoRow label="Upozilla"         value={admission.upozilla} />
+        <SectionHeader icon={MapPin} title="Address" />
+        <InfoRow label="Present Address"   value={presentAddress || "—"} />
+        <InfoRow label="Permanent Address" value={permanentAddress || "—"} />
       </div>
 
-      {/* Guardian */}
+      {/* Guardian / Family */}
       <div className="rounded-xl border bg-background p-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Guardian / Family</p>
-        <InfoRow label="Father"       value={admission.father_name} />
-        <InfoRow label="Mother"       value={admission.mother_name} />
-        <InfoRow label="Guardian"     value={admission.guardian_name} />
-        <InfoRow label="Phone"        value={admission.guardian_phone} />
-        <InfoRow label="Email"        value={admission.guardian_email} />
-        <InfoRow label="Occupation"   value={admission.guardian_occupation} />
+        <SectionHeader icon={Users} title="Guardian / Family" />
+        <div className="sm:flex sm:justify-between">
+        <InfoRow label="Father (English)" value={admission.father_name_en} />
+        <InfoRow label="Father (Bengali)" value={admission.father_name_bn} />
+        </div>
+        <div className="sm:flex sm:justify-between">
+        <InfoRow label="Father Mobile"    value={admission.father_mobile_no} />
+        <InfoRow label="Father Occupation" value={admission.father_occupation} />
+        </div>
+        
+        <div className="sm:flex sm:justify-between">
+        <InfoRow label="Mother (English)" value={admission.mother_name_en} />
+        <InfoRow label="Mother (Bengali)" value={admission.mother_name_bn} />
+        <InfoRow label="Mother Mobile"    value={admission.mother_mobile_no} />
+        </div>
+        
+        <div className="sm:flex sm:justify-between">
+        <InfoRow label="Guardian Name"    value={admission.guardian_name} />
+        <InfoRow label="Relation"         value={admission.guardian_student_relation} />
+        </div>
+        
+        <div className="sm:flex sm:justify-between">
+          <InfoRow label="Guardian Mobile"  value={admission.guardian_mobile_no} />
+        <InfoRow label="Guardian Occupation" value={admission.guardian_occupation} />
+        </div>
+        
       </div>
 
       {/* Actions */}
@@ -187,9 +288,10 @@ export default function ApplicationPage() {
           <>
             <Button
               className="w-full h-12 text-base bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold"
-              onClick={handlePayNow}
+              onClick={() => router.push("/admission/application/payment")}
             >
-              <CreditCard className="size-5" />Pay Application Fee — ৳{APPLICATION_FEE}
+              <CreditCard className="size-5" />
+              Pay Application Fee — ৳{applicationFee}
             </Button>
             <Button variant="outline" className="w-full gap-2" asChild>
               <a href="/admission/application/edit">
@@ -203,7 +305,11 @@ export default function ApplicationPage() {
             <a href="/admission/application/receipt">View / Print Receipt</a>
           </Button>
         )}
-        <Button variant="ghost" className="w-full gap-2 text-muted-foreground" onClick={() => window.print()}>
+        <Button
+          variant="ghost"
+          className="w-full gap-2 text-muted-foreground"
+          onClick={() => window.print()}
+        >
           <Printer className="size-4" />Print Application
         </Button>
       </div>
