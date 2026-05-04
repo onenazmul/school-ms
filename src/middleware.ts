@@ -16,9 +16,9 @@ const STAFF_ROLE_PREFIX: Record<string, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function getStudentCookieSession(req: NextRequest) {
+async function getCookieSession(req: NextRequest, cookieName: string) {
   try {
-    const token = req.cookies.get("student_session")?.value;
+    const token = req.cookies.get(cookieName)?.value;
     if (!token) return null;
     const secret = new TextEncoder().encode(process.env.BETTER_AUTH_SECRET!);
     const { payload } = await jwtVerify(token, secret);
@@ -26,6 +26,14 @@ async function getStudentCookieSession(req: NextRequest) {
   } catch {
     return null;
   }
+}
+
+function getStudentCookieSession(req: NextRequest) {
+  return getCookieSession(req, "student_session");
+}
+
+function getAdminCookieSession(req: NextRequest) {
+  return getCookieSession(req, "admin_session");
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
@@ -90,16 +98,37 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next({ request: { headers } });
   }
 
-  // ── Staff panels (/admin, /teacher) — guarded by Better Auth session ──────
-  if (
-    pathname.startsWith("/admin") ||
-    pathname.startsWith("/teacher")
-  ) {
-    // DEV_OPEN_STAFF=true bypasses auth so panels are explorable without a backend
+  // ── Admin panel (/admin) — guarded by admin_session JWT cookie ───────────
+  if (pathname.startsWith("/admin")) {
     if (process.env.DEV_OPEN_STAFF === "true") {
       const headers = new Headers(req.headers);
       headers.set("x-user-id",       "dev-admin");
       headers.set("x-user-role",     "admin");
+      headers.set("x-laravel-token", "dev-token");
+      return NextResponse.next({ request: { headers } });
+    }
+
+    const session = await getAdminCookieSession(req);
+
+    if (!session) {
+      const dest = new URL("/login", req.url);
+      dest.searchParams.set("callbackUrl", pathname);
+      return NextResponse.redirect(dest);
+    }
+
+    const headers = new Headers(req.headers);
+    headers.set("x-user-id",       session.id            ?? "");
+    headers.set("x-user-role",     "admin");
+    headers.set("x-laravel-token", session.laravelToken   ?? "");
+    return NextResponse.next({ request: { headers } });
+  }
+
+  // ── Teacher panel (/teacher) — guarded by Better Auth session ────────────
+  if (pathname.startsWith("/teacher")) {
+    if (process.env.DEV_OPEN_STAFF === "true") {
+      const headers = new Headers(req.headers);
+      headers.set("x-user-id",       "dev-teacher");
+      headers.set("x-user-role",     "teacher");
       headers.set("x-laravel-token", "dev-token");
       return NextResponse.next({ request: { headers } });
     }
@@ -113,18 +142,9 @@ export async function middleware(req: NextRequest) {
     }
 
     const user = session.user as any;
-    const role: string = user.role ?? "";
-    const allowedPrefix = STAFF_ROLE_PREFIX[role];
-
-    // Wrong panel for this role → send to correct home
-    if (!allowedPrefix || !pathname.startsWith(allowedPrefix)) {
-      const home = STAFF_ROLE_HOME[role] ?? "/login";
-      return NextResponse.redirect(new URL(home, req.url));
-    }
-
     const headers = new Headers(req.headers);
     headers.set("x-user-id",       user.id             ?? "");
-    headers.set("x-user-role",     role);
+    headers.set("x-user-role",     "teacher");
     headers.set("x-laravel-token", user.laravelToken    ?? "");
     return NextResponse.next({ request: { headers } });
   }

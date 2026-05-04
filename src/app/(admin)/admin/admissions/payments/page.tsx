@@ -4,7 +4,7 @@
 // Includes Review Dialog for verify/reject actions.
 
 import { Suspense, useState, useMemo } from "react";
-import { useSession } from "@/lib/auth/client";
+import { useSession } from "@/lib/auth/admin-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { formatBDT, fmtDate, fmtDateTime } from "@/lib/utils/format";

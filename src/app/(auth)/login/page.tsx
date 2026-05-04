@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signIn } from "@/lib/auth/client";
+import { adminSignIn } from "@/lib/auth/admin";
 import { loginSchema, type LoginInput } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,11 +15,6 @@ import {
 } from "@/components/ui/form";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff, ShieldCheck } from "lucide-react";
-
-const ROLE_HOME: Record<string, string> = {
-  admin:   "/admin/dashboard",
-  teacher: "/teacher/dashboard",
-};
 
 function LoginForm() {
   const router       = useRouter();
@@ -36,14 +31,9 @@ function LoginForm() {
   async function onSubmit(values: LoginInput) {
     setLoading(true);
     try {
-      const result = await signIn.email({ email: values.email, password: values.password });
-      if (result.error) throw new Error(result.error.message);
-      const role = (result.data?.user as any)?.role as string;
-      if (role === "student") {
-        toast.error("Students must sign in at the Student Portal.");
-        return;
-      }
-      router.push(callbackUrl || ROLE_HOME[role] || "/");
+      const result = await adminSignIn(values.email, values.password);
+      if (!result.success) throw new Error(result.message);
+      router.push(callbackUrl || "/admin/dashboard");
       router.refresh();
     } catch (err: any) {
       toast.error(err.message ?? "Login failed");
@@ -102,7 +92,7 @@ function LoginForm() {
         </form>
       </Form>
 
-      <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+      {/* <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Demo credentials</p>
         {[
           { role: "Admin",   email: "admin@school.edu"   },
@@ -115,7 +105,7 @@ function LoginForm() {
             <span className="font-mono text-foreground">{d.email}</span>
           </button>
         ))}
-      </div>
+      </div> */}
 
       <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 flex items-center justify-between gap-3">
         <div>

@@ -1,6 +1,5 @@
 // lib/auth/server.ts
 import { betterAuth } from "better-auth";
-import { cookies } from "next/headers";
 
 const API_BASE = process.env.API_URL ?? "http://localhost:8000/api";
 
@@ -12,7 +11,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     async signIn({ email, password }: { email: string; password: string }) {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      const res = await fetch(`${API_BASE}/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json", "X-Tenant-Domain": "school1.com" },
         body: JSON.stringify({ email, password }),
@@ -94,9 +93,18 @@ const DEV_MOCK_SESSION: { user: AuthUser } = {
 
 export async function getServerSession() {
   if (process.env.DEV_OPEN_STAFF === "true") return DEV_MOCK_SESSION;
-  const cookieStore = await cookies();
-  const session = await auth.api.getSession({
-    headers: new Headers({ cookie: cookieStore.toString() }),
-  });
-  return session as { user: AuthUser } | null;
+  const { getAdminSession } = await import("./admin");
+  const adminSession = await getAdminSession();
+  if (adminSession) {
+    return {
+      user: {
+        id:           adminSession.id,
+        email:        adminSession.email,
+        name:         adminSession.name,
+        role:         adminSession.role as AuthUser["role"],
+        laravelToken: adminSession.laravelToken,
+      },
+    };
+  }
+  return null;
 }

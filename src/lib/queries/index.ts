@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { EP } from "@/lib/api/endpoints";
-import { useSession } from "@/lib/auth/client";
+import { useSession } from "@/lib/auth/admin-client";
 import { useStudentSession } from "@/lib/auth/student-client";
 
 export const QK = {

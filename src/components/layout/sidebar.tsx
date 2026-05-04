@@ -5,8 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { signOut } from "@/lib/auth/client";
-import { useSession } from "@/lib/auth/client";
+import { useSession, signOut } from "@/lib/auth/admin-client";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,

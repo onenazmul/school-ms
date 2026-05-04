@@ -7,7 +7,19 @@ export const EP = {
   AUTH_ME: "/auth/me",
   AUTH_REFRESH: "/auth/refresh",
 
-  // Students
+  // Admin — Auth
+  ADMIN_LOGIN: "/admin/login",
+
+  // Admin — Admissions
+  ADMIN_ADMISSIONS: "/admin/admission",
+  ADMIN_ADMISSION: (id: string | number) => `/admin/admission/${id}`,
+  ADMIN_ADMIT_TO_STUDENT: (id: string | number) => `/admin/admission-student/${id}`,
+
+  // Admin — Students
+  ADMIN_STUDENTS: "/admin/student",
+  ADMIN_STUDENT: (id: string | number) => `/admin/student/${id}`,
+
+  // Students (student-portal)
   STUDENTS: "/students",
   STUDENT: (id: string) => `/students/${id}`,
   STUDENT_LEDGER: (id: string) => `/students/${id}/ledger`,
@@ -27,7 +39,7 @@ export const EP = {
   RECEIPT: (id: string) => `/finance/receipts/${id}`,
   LEDGER: "/finance/ledger",
 
-  // Admission
+  // Admission (applicant-portal)
   APPLY: "/admission",
   ADMISSIONS: "/admission",
   ADMISSION: (id: string | number) => `/admission/${id}`,
