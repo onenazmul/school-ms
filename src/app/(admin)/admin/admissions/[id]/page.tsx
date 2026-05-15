@@ -89,6 +89,8 @@ type Admission = {
   payment_status: string;
   application_fee: string;
   payment_tracking_id: string | null;
+  enrollment_payment_status: string;
+  enrollment_payment_tracking_id: string | null;
   username: string | null;
   created_at: string;
   updated_at: string;
@@ -451,22 +453,32 @@ export default function AdmissionDetailPage({ params }: { params: Promise<{ id: 
 
       {/* Quick action buttons */}
       {!editMode && admission.status !== "Enrolled" && (
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            size="sm"
-            className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-            onClick={() => setApproveOpen(true)}
-          >
-            <UserCheck className="size-3.5" /> Approve to Student
-          </Button>
-          {admission.status !== "Rejected" && (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
-              size="sm" variant="outline"
-              className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
-              onClick={() => setRejectOpen(true)}
+              size="sm"
+              className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => setApproveOpen(true)}
             >
-              <XCircle className="size-3.5" /> Reject
+              <UserCheck className="size-3.5" /> Approve to Student
             </Button>
+            {admission.status !== "Rejected" && (
+              <Button
+                size="sm" variant="outline"
+                className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                onClick={() => setRejectOpen(true)}
+              >
+                <XCircle className="size-3.5" /> Reject
+              </Button>
+            )}
+          </div>
+          {admission.status === "Approved" && admission.enrollment_payment_status !== "Paid" && (
+            <p className="text-xs text-amber-600 flex items-center gap-1">
+              <Lock className="size-3" />
+              {admission.enrollment_payment_status === "Payment Submitted"
+                ? "Enrollment fee submitted — verify payment before enrolling."
+                : "Enrollment fee not yet paid. The enroll action will be blocked by the server if fee is required."}
+            </p>
           )}
         </div>
       )}
@@ -605,9 +617,18 @@ export default function AdmissionDetailPage({ params }: { params: Promise<{ id: 
       {/* Fee & Payment */}
       <div>
         <SectionHeading icon={CreditCard} title="Fee & Payment" />
-        <InfoRow label="Application Fee"       value={`৳ ${admission.application_fee}`} />
-        <InfoRow label="Payment Status"        value={admission.payment_status} />
-        <InfoRow label="Payment Tracking ID"   value={admission.payment_tracking_id} />
+        <InfoRow label="Application Fee"         value={`৳ ${admission.application_fee}`} />
+        <InfoRow label="App Payment Status"      value={admission.payment_status} />
+        <InfoRow label="App Tracking ID"         value={admission.payment_tracking_id} />
+        <div className="pt-2 mt-2 border-t border-dashed">
+          <InfoRow
+            label="Enrollment Payment"
+            value={admission.enrollment_payment_status}
+          />
+          {admission.enrollment_payment_tracking_id && (
+            <InfoRow label="Enrollment Tracking ID" value={admission.enrollment_payment_tracking_id} />
+          )}
+        </div>
       </div>
 
       {/* Account */}

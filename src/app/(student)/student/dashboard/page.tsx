@@ -1,32 +1,80 @@
 "use client";
 // app/(student)/student/dashboard/page.tsx
 
+import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 import {
   DollarSign, CheckCircle2, AlertCircle, Clock, Receipt, FileText,
 } from "lucide-react";
 
-const MOCK_STUDENT = {
-  name: "Rahim Uddin",
-  class: "9A",
-  rollNo: "09A-12",
-  admissionNo: "BFS-2024-0127",
-  dueBalance: 0,
-  paidThisYear: 49500,
-  nextDue: { description: "Tuition Fee - June 2025", amount: 5500, dueDate: "2025-06-10" },
-  recentReceipts: [
-    { no: "RCP-001234", amount: 5500, date: "2025-05-07", method: "Cash" },
-    { no: "RCP-001198", amount: 5500, date: "2025-04-06", method: "bKash" },
-    { no: "RCP-001142", amount: 6700, date: "2025-03-04", method: "Cash" },
-  ],
+type Summary = {
+  due_balance: number;
+  paid_this_year: number;
+  next_due: { id: string; description: string; amount: number; due_date: string } | null;
 };
 
+type RecentReceipt = {
+  id: string;
+  source: "fee_receipt" | "admission_payment" | "enrollment_payment";
+  receipt_number: string | null;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+};
+
+function methodLabel(method: string) {
+  const map: Record<string, string> = {
+    cash: "Cash", bank_transfer: "Bank Transfer", cheque: "Cheque", online: "Online",
+    bkash: "bKash", rocket: "Rocket",
+  };
+  return map[method] ?? method;
+}
+
 export default function StudentDashboard() {
-  const { data: __sd } = useSession(); const session = __sd?.user as any;
-  const student = MOCK_STUDENT;
+  const { data: __sd, isPending: sessionLoading } = useSession();
+  const session = __sd?.user as any;
+
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    if (!session?.id || sessionLoading) return;
+    fetch("/api/v1/student/me")
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json()).message ?? "Could not load dashboard");
+        return r.json();
+      })
+      .then((data) => {
+        setSummary(data.summary);
+        setRecentReceipts(data.recent_receipts ?? []);
+      })
+      .catch((err) => toast.error(err.message ?? "Could not load dashboard"))
+      .finally(() => setFetching(false));
+  }, [session, sessionLoading]);
+
+  if (sessionLoading || fetching) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-7 w-48" />
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-24 rounded-xl" />
+          <Skeleton className="h-24 rounded-xl" />
+        </div>
+        <Skeleton className="h-20 rounded-xl" />
+        <Skeleton className="h-40 rounded-xl" />
+      </div>
+    );
+  }
+
+  const dueBalance = summary?.due_balance ?? 0;
+  const paidThisYear = summary?.paid_this_year ?? 0;
+  const nextDue = summary?.next_due ?? null;
 
   return (
     <div className="space-y-6">
@@ -34,19 +82,19 @@ export default function StudentDashboard() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold">
-            {/* Welcome back, {session?.name?.split(" ")[0] ?? "Student"} */}
             Welcome back, {session?.name ?? "Student"}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {/* Class {student.class} · Roll {student.rollNo} · {student.admissionNo} */}
-            @{session?.username} 
+            @{session?.username}
           </p>
         </div>
         <Badge
           variant="outline"
-          className={`${student.dueBalance === 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}
+          className={dueBalance === 0
+            ? "bg-green-50 text-green-700 border-green-200"
+            : "bg-red-50 text-red-700 border-red-200"}
         >
-          {student.dueBalance === 0 ? "All Clear" : `৳${student.dueBalance.toLocaleString()} Due`}
+          {dueBalance === 0 ? "All Clear" : `৳${dueBalance.toLocaleString()} Due`}
         </Badge>
       </div>
 
@@ -58,7 +106,7 @@ export default function StudentDashboard() {
               <div>
                 <p className="text-xs text-muted-foreground">Paid This Year</p>
                 <p className="text-xl font-semibold mt-0.5">
-                  ৳{student.paidThisYear.toLocaleString()}
+                  ৳{paidThisYear.toLocaleString()}
                 </p>
               </div>
               <div className="size-10 rounded-xl bg-green-50 flex items-center justify-center">
@@ -73,11 +121,11 @@ export default function StudentDashboard() {
               <div>
                 <p className="text-xs text-muted-foreground">Outstanding Due</p>
                 <p className="text-xl font-semibold mt-0.5">
-                  ৳{student.dueBalance.toLocaleString()}
+                  ৳{dueBalance.toLocaleString()}
                 </p>
               </div>
-              <div className={`size-10 rounded-xl flex items-center justify-center ${student.dueBalance > 0 ? "bg-red-50" : "bg-slate-50"}`}>
-                <AlertCircle className={`size-5 ${student.dueBalance > 0 ? "text-red-600" : "text-slate-400"}`} />
+              <div className={`size-10 rounded-xl flex items-center justify-center ${dueBalance > 0 ? "bg-red-50" : "bg-slate-50"}`}>
+                <AlertCircle className={`size-5 ${dueBalance > 0 ? "text-red-600" : "text-slate-400"}`} />
               </div>
             </div>
           </CardContent>
@@ -85,7 +133,7 @@ export default function StudentDashboard() {
       </div>
 
       {/* Next due */}
-      {student.nextDue && (
+      {nextDue && (
         <Card className="border-indigo-200 bg-indigo-50/40">
           <CardContent className="pt-5">
             <div className="flex items-center gap-3">
@@ -93,13 +141,17 @@ export default function StudentDashboard() {
                 <Clock className="size-5 text-indigo-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-indigo-900">{student.nextDue.description}</p>
+                <p className="text-sm font-medium text-indigo-900">{nextDue.description}</p>
                 <p className="text-xs text-indigo-600 mt-0.5">
-                  Due: {new Date(student.nextDue.dueDate).toLocaleDateString("en-BD", { day: "numeric", month: "long" })}
+                  Due:{" "}
+                  {new Date(nextDue.due_date).toLocaleDateString("en-BD", {
+                    day: "numeric",
+                    month: "long",
+                  })}
                 </p>
               </div>
               <p className="text-lg font-semibold text-indigo-800 shrink-0">
-                ৳{student.nextDue.amount.toLocaleString()}
+                ৳{nextDue.amount.toLocaleString()}
               </p>
             </div>
           </CardContent>
@@ -117,26 +169,39 @@ export default function StudentDashboard() {
           </div>
         </CardHeader>
         <CardContent className="space-y-1">
-          {student.recentReceipts.map((r) => (
-            <div
-              key={r.no}
-              className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="size-8 rounded-full bg-green-50 flex items-center justify-center">
-                  <Receipt className="size-4 text-green-600" />
+          {recentReceipts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No receipts yet.</p>
+          ) : (
+            recentReceipts.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="size-8 rounded-full bg-green-50 flex items-center justify-center">
+                    <Receipt className="size-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">
+                      {r.receipt_number ??
+                        (r.source === "enrollment_payment"
+                          ? "Enrollment Fee"
+                          : "Admission Fee")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(r.payment_date).toLocaleDateString("en-BD", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                      {" · "}{methodLabel(r.payment_method)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">{r.no}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(r.date).toLocaleDateString("en-BD", { day: "2-digit", month: "short", year: "numeric" })}
-                    {" · "}{r.method}
-                  </p>
-                </div>
+                <span className="text-sm font-medium">৳{r.amount.toLocaleString()}</span>
               </div>
-              <span className="text-sm font-medium">৳{r.amount.toLocaleString()}</span>
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
 

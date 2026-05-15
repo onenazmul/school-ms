@@ -10,12 +10,12 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import type { SessionUser } from "@/lib/auth/types";
 import { signOut } from "@/lib/auth/client";
 import {
-  GraduationCap, LayoutDashboard, FileText, Receipt, LogOut,
+  GraduationCap, LayoutDashboard, FileText, Receipt, LogOut, ExternalLink,
 } from "lucide-react";
 
 const NAV = [
   { label: "Overview",     href: "/admission/dashboard",             icon: LayoutDashboard },
-  { label: "Application",  href: "/admission/application",           icon: FileText        },
+  { label: "My Application", href: "/admission/application",         icon: FileText        },
   { label: "Receipt",      href: "/admission/application/receipt",   icon: Receipt         },
 ];
 
@@ -84,8 +84,16 @@ export function AdmissionShell({
         </Link>
 
         {/* Nav */}
-        <div className="flex-1 hidden sm:block">
+        <div className="flex-1 hidden sm:flex items-center gap-1">
           <AdmissionNav pathname={pathname} />
+          <a
+            href="/student/dashboard"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors ml-1"
+          >
+            <GraduationCap className="size-3.5 shrink-0" />
+            Student Panel
+            <ExternalLink className="size-3 opacity-60" />
+          </a>
         </div>
 
         {/* User */}
@@ -129,6 +137,14 @@ export function AdmissionShell({
             </Link>
           );
         })}
+        <a
+          href="/student/dashboard"
+          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+        >
+          <GraduationCap className="size-3.5" />
+          Student Panel
+          <ExternalLink className="size-3 opacity-60" />
+        </a>
       </nav>
 
       {/* ── Content ── */}

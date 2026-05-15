@@ -40,7 +40,6 @@ export async function GET() {
           paymentSubmissions: {
             where: { status: "verified" },
             orderBy: { verifiedAt: "desc" },
-            take: 1,
           },
         },
       });
@@ -50,7 +49,9 @@ export async function GET() {
 
     if (!admission) return NextResponse.json({ message: "Admission not found" }, { status: 404 });
 
-    const verifiedPayment = ((admission as any).paymentSubmissions ?? [])[0] ?? null;
+    const allVerified = (admission as any).paymentSubmissions ?? [];
+    const verifiedPayment = allVerified.find((ps: any) => ps.paymentContext === "admission") ?? allVerified[0] ?? null;
+    const verifiedEnrollmentPayment = allVerified.find((ps: any) => ps.paymentContext === "enrollment") ?? null;
     const cfg = (admission as any).admissionConfig ?? null;
     const classOverride = cfg?.classConfigs?.find((c: any) => c.className === admission!.className) ?? null;
     const mark = (admission as any).mark ?? null;
@@ -76,6 +77,15 @@ export async function GET() {
         test_type:      testType  ?? null,
         result_day:     resultDay ? (resultDay instanceof Date ? resultDay.toISOString() : resultDay) : null,
         result_visible: resultVisible,
+        enrollment_fee_required: cfg?.enrollmentFeeRequired ?? false,
+        enrollment_fee_amount: (() => {
+          if (!cfg) return null;
+          const effectiveAmount =
+            cfg.enrollmentFeeMode === "per_class"
+              ? (classOverride?.enrollmentFeeAmount ?? cfg.enrollmentFeeAmount)
+              : cfg.enrollmentFeeAmount;
+          return effectiveAmount != null ? Number(effectiveAmount) : null;
+        })(),
         marks: showMarks && mark
           ? {
               written_marks: mark.writtenMarks,
@@ -100,6 +110,25 @@ export async function GET() {
                                       : verifiedPayment.verifiedAt ?? null,
               verified_by:          verifiedPayment.verifiedBy ?? null,
               receipt_number:       verifiedPayment.receiptNumber ?? null,
+            }
+          : null,
+        enrollment_payment_submission: verifiedEnrollmentPayment
+          ? {
+              method:               verifiedEnrollmentPayment.method,
+              transaction_id:       verifiedEnrollmentPayment.transactionId,
+              phone_number:         verifiedEnrollmentPayment.phoneNumber ?? null,
+              amount_sent:          Number(verifiedEnrollmentPayment.amountSent),
+              payment_date:         verifiedEnrollmentPayment.paymentDate instanceof Date
+                                      ? verifiedEnrollmentPayment.paymentDate.toISOString()
+                                      : verifiedEnrollmentPayment.paymentDate,
+              account_holder_name:  verifiedEnrollmentPayment.accountHolderName ?? null,
+              branch:               verifiedEnrollmentPayment.branch ?? null,
+              deposit_slip_no:      verifiedEnrollmentPayment.depositSlipNo ?? null,
+              verified_at:          verifiedEnrollmentPayment.verifiedAt instanceof Date
+                                      ? verifiedEnrollmentPayment.verifiedAt.toISOString()
+                                      : verifiedEnrollmentPayment.verifiedAt ?? null,
+              verified_by:          verifiedEnrollmentPayment.verifiedBy ?? null,
+              receipt_number:       verifiedEnrollmentPayment.receiptNumber ?? null,
             }
           : null,
       },

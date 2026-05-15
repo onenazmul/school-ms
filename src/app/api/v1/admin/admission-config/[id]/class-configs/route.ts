@@ -44,12 +44,13 @@ export async function POST(
     data: {
       admissionConfigId: Number(id),
       className,
-      fee:             body.fee             != null ? Number(body.fee)             : null,
-      testDay:         body.test_day        ? new Date(String(body.test_day))       : null,
-      testType:        body.test_type       ? String(body.test_type)               : null,
-      maxWrittenMarks: body.max_written_marks != null ? Number(body.max_written_marks) : null,
-      maxVivaMarks:    body.max_viva_marks    != null ? Number(body.max_viva_marks)    : null,
-      resultDay:       body.result_day      ? new Date(String(body.result_day))     : null,
+      fee:                 body.fee                  != null ? Number(body.fee)                  : null,
+      enrollmentFeeAmount: body.enrollment_fee_amount != null ? Number(body.enrollment_fee_amount) : null,
+      testDay:             body.test_day              ? new Date(String(body.test_day))             : null,
+      testType:            body.test_type             ? String(body.test_type)                     : null,
+      maxWrittenMarks:     body.max_written_marks     != null ? Number(body.max_written_marks)     : null,
+      maxVivaMarks:        body.max_viva_marks        != null ? Number(body.max_viva_marks)        : null,
+      resultDay:           body.result_day            ? new Date(String(body.result_day))           : null,
     },
   });
   return NextResponse.json({ classConfig }, { status: 201 });

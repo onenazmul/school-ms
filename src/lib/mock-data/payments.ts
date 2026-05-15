@@ -2,7 +2,7 @@
 // Mock payment data matching the PaymentSubmission and ExamFee data models.
 // Field names exactly match the API spec from the task.
 
-export type PaymentContext = "admission" | "exam_fee";
+export type PaymentContext = "admission" | "enrollment" | "exam_fee";
 
 export type PaymentMethod = "bkash" | "rocket" | "bank_transfer";
 

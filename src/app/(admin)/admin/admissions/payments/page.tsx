@@ -96,7 +96,7 @@ function exportCSV(subs: PaymentSubmission[]) {
   const rows = subs.map((s) => [
     s.id,
     s.applicant_username ?? s.applicant_name ?? "",
-    s.payment_context === "admission" ? "Admission" : "Exam Fee",
+    s.payment_context === "admission" ? "Admission" : s.payment_context === "enrollment" ? "Enrollment" : "Exam Fee",
     methodLabel(s.method),
     s.transaction_id,
     s.phone_number ?? "",
@@ -433,7 +433,7 @@ export default function PaymentSubmissionsPage() {
         fetch(`/api/v1/admin/payment-submissions/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "verified" }),
+          body: JSON.stringify({ verdict: "verified" }),
         })
       )),
     onSuccess: () => {
@@ -530,6 +530,7 @@ export default function PaymentSubmissionsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Fee Types</SelectItem>
                   <SelectItem value="admission">Admission Fee</SelectItem>
+                  <SelectItem value="enrollment">Enrollment Fee</SelectItem>
                   <SelectItem value="exam_fee">Exam Fee</SelectItem>
                 </SelectContent>
               </Select>
@@ -600,7 +601,7 @@ export default function PaymentSubmissionsPage() {
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline" className="text-xs">
-                              {s.payment_context === "admission" ? "Admission" : "Exam Fee"}
+                              {s.payment_context === "admission" ? "Admission" : s.payment_context === "enrollment" ? "Enrollment" : "Exam Fee"}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">

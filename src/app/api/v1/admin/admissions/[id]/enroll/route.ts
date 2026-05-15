@@ -25,8 +25,28 @@ export async function POST(
   if (admission.student) return NextResponse.json({ message: "Already enrolled" }, { status: 409 });
   if (!admission.user) return NextResponse.json({ message: "No user linked to this admission" }, { status: 422 });
 
-  const studentId = createId();
+  // Enrollment fee gate
+  const activeConfig = await db.admissionConfig.findFirst({ where: { isActive: true } });
+  if (activeConfig?.enrollmentFeeRequired && admission.enrollmentPaymentStatus !== "Paid") {
+    return NextResponse.json(
+      { message: "Enrollment fee has not been verified. Please verify the enrollment fee payment before enrolling." },
+      { status: 409 },
+    );
+  }
+
   const academicYear = new Date().getFullYear().toString();
+
+  // Auto-assign roll number: MAX existing roll for this class + year, then +1
+  const lastStudent = await db.student.findFirst({
+    where: { className: admission.className, academicYear },
+    orderBy: { rollNumber: "desc" },
+    select: { rollNumber: true },
+  });
+  const nextRoll = lastStudent?.rollNumber
+    ? String(Number(lastStudent.rollNumber) + 1).padStart(String(lastStudent.rollNumber).length, "0")
+    : "1";
+
+  const studentId = createId();
 
   const [student] = await db.$transaction([
     db.student.create({
@@ -36,6 +56,7 @@ export async function POST(
         className: admission.className,
         sessionName: admission.sessionName,
         academicYear,
+        rollNumber: nextRoll,
         status: "Active",
       },
     }),
@@ -69,6 +90,7 @@ export async function POST(
       admission_id: student.admissionId,
       class_name: student.className,
       academic_year: student.academicYear,
+      roll_number: student.rollNumber,
     },
   });
 }

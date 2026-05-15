@@ -113,6 +113,8 @@ type Admission = {
   payment_status: string;
   application_fee: string;
   payment_tracking_id: string | null;
+  enrollment_payment_status: string;
+  enrollment_payment_tracking_id: string | null;
   username: string | null;
   created_at: string;
   updated_at: string;
@@ -736,6 +738,10 @@ function AdmissionSheet({
           <InfoRow label="Application Status" value={admission.status} />
           <InfoRow label="Payment Status" value={admission.payment_status} />
           <InfoRow label="Payment Tracking ID" value={admission.payment_tracking_id} />
+          <InfoRow label="Enrollment Payment" value={admission.enrollment_payment_status} />
+          {admission.enrollment_payment_tracking_id && (
+            <InfoRow label="Enrollment Tracking ID" value={admission.enrollment_payment_tracking_id} />
+          )}
 
           {admission.username && (
             <>

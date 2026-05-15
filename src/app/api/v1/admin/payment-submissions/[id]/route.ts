@@ -57,36 +57,45 @@ export async function PATCH(
 
   const admissionUpdate: Record<string, unknown> = {};
   if (sub.admissionId) {
-    if (verdict === "verified") {
-      admissionUpdate.paymentStatus = "Paid";
-      // Auto-advance to Awaiting Test if the active config has a test day for this class
-      const admission = await db.admission.findUnique({
-        where: { id: sub.admissionId },
-        select: { className: true },
-      });
-      if (admission) {
-        const activeConfig = await db.admissionConfig.findFirst({
-          where: { isActive: true },
-          include: { classConfigs: { where: { className: admission.className } } },
-        });
-        const hasTestDay =
-          activeConfig?.classConfigs[0]?.testDay ?? activeConfig?.globalTestDay;
-        admissionUpdate.status = hasTestDay ? "Awaiting Test" : "Under Review";
-        if (activeConfig) admissionUpdate.admissionConfigId = activeConfig.id;
+    if (sub.paymentContext === "enrollment") {
+      // Enrollment fee verification — only touches enrollmentPaymentStatus
+      if (verdict === "verified") {
+        admissionUpdate.enrollmentPaymentStatus = "Paid";
+      } else {
+        // fake or return: reset so applicant can resubmit
+        admissionUpdate.enrollmentPaymentStatus = "Unpaid";
+        admissionUpdate.enrollmentPaymentTrackingId = null;
       }
-    }
+    } else {
+      // Application fee verification (original flow)
+      if (verdict === "verified") {
+        admissionUpdate.paymentStatus = "Paid";
+        const admission = await db.admission.findUnique({
+          where: { id: sub.admissionId },
+          select: { className: true },
+        });
+        if (admission) {
+          const activeConfig = await db.admissionConfig.findFirst({
+            where: { isActive: true },
+            include: { classConfigs: { where: { className: admission.className } } },
+          });
+          const hasTestDay =
+            activeConfig?.classConfigs[0]?.testDay ?? activeConfig?.globalTestDay;
+          admissionUpdate.status = hasTestDay ? "Awaiting Test" : "Under Review";
+          if (activeConfig) admissionUpdate.admissionConfigId = activeConfig.id;
+        }
+      }
 
-    if (verdict === "fake") {
-      // Unlock payment resubmission only — info lock and app status unchanged
-      admissionUpdate.paymentStatus = "Unpaid";
-      admissionUpdate.paymentTrackingId = null;
-    }
+      if (verdict === "fake") {
+        admissionUpdate.paymentStatus = "Unpaid";
+        admissionUpdate.paymentTrackingId = null;
+      }
 
-    if (verdict === "return") {
-      // Full reset — applicant can edit info and resubmit payment
-      admissionUpdate.paymentStatus = "Unpaid";
-      admissionUpdate.paymentTrackingId = null;
-      admissionUpdate.status = "Pending";
+      if (verdict === "return") {
+        admissionUpdate.paymentStatus = "Unpaid";
+        admissionUpdate.paymentTrackingId = null;
+        admissionUpdate.status = "Pending";
+      }
     }
   }
 
@@ -94,6 +103,10 @@ export async function PATCH(
     db.paymentSubmission.update({ where: { id }, data: subUpdate }),
     ...(sub.admissionId && Object.keys(admissionUpdate).length > 0
       ? [db.admission.update({ where: { id: sub.admissionId }, data: admissionUpdate })]
+      : []),
+    // Auto-mark the linked bill as paid when exam_fee payment is verified
+    ...(sub.billId && sub.paymentContext === "exam_fee" && verdict === "verified"
+      ? [db.bill.update({ where: { id: sub.billId }, data: { status: "paid" } })]
       : []),
   ]);
 
@@ -123,9 +136,12 @@ export async function PATCH(
     });
     const phone = adm?.guardianMobileNo ?? adm?.fatherMobileNo ?? adm?.motherMobileNo;
     if (phone && adm) {
+      const isEnrollment = sub.paymentContext === "enrollment";
       const msg =
         verdict === "verified"
-          ? `Dear Guardian, payment for ${adm.nameEn} has been verified. Your application is now under review.`
+          ? isEnrollment
+            ? `Dear Guardian, enrollment fee for ${adm.nameEn} has been verified. Please await final enrollment confirmation.`
+            : `Dear Guardian, payment for ${adm.nameEn} has been verified. Your application is now under review.`
           : verdict === "fake"
           ? `Dear Guardian, the payment proof submitted for ${adm.nameEn} could not be verified. Please resubmit a valid payment proof. Note: ${admin_note}`
           : `Dear Guardian, your payment for ${adm.nameEn} has been returned for correction. Please log in and resubmit. Note: ${admin_note}`;

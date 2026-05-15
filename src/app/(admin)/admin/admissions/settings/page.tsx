@@ -27,6 +27,7 @@ interface ClassConfig {
   id: number;
   className: string;
   fee: number | null;
+  enrollmentFeeAmount: number | null;
   testDay: string | null;
   testType: string | null;
   maxWrittenMarks: number | null;
@@ -51,6 +52,9 @@ interface AdmissionConfig {
   marksThresholdEnabled: boolean;
   marksPassThreshold: number | null;
   marksThresholdAction: string;
+  enrollmentFeeMode: string;
+  enrollmentFeeRequired: boolean;
+  enrollmentFeeAmount: number | null;
   classConfigs: ClassConfig[];
 }
 
@@ -83,12 +87,16 @@ const BLANK_FORM = {
   marks_threshold_enabled: false,
   marks_pass_threshold: "",
   marks_threshold_action: "flag_review",
+  enrollment_fee_mode: "same_for_all",
+  enrollment_fee_required: false,
+  enrollment_fee_amount: "",
 };
 type ConfigForm = typeof BLANK_FORM;
 
 const BLANK_CLASS_ROW = {
   class_name: "",
   fee: "",
+  enrollment_fee_amount: "",
   test_day: "",
   test_type: "",
   max_written_marks: "",
@@ -113,6 +121,9 @@ function cfgToForm(cfg: AdmissionConfig): ConfigForm {
     marks_threshold_enabled: cfg.marksThresholdEnabled,
     marks_pass_threshold: cfg.marksPassThreshold != null ? String(cfg.marksPassThreshold) : "",
     marks_threshold_action: cfg.marksThresholdAction,
+    enrollment_fee_mode: cfg.enrollmentFeeMode,
+    enrollment_fee_required: cfg.enrollmentFeeRequired,
+    enrollment_fee_amount: cfg.enrollmentFeeAmount != null ? String(cfg.enrollmentFeeAmount) : "",
   };
 }
 
@@ -132,6 +143,9 @@ function formToBody(f: ConfigForm): Record<string, unknown> {
     marks_threshold_enabled: f.marks_threshold_enabled,
     marks_pass_threshold: f.marks_pass_threshold !== "" ? Number(f.marks_pass_threshold) : null,
     marks_threshold_action: f.marks_threshold_action,
+    enrollment_fee_mode: f.enrollment_fee_mode,
+    enrollment_fee_required: f.enrollment_fee_required,
+    enrollment_fee_amount: f.enrollment_fee_amount !== "" ? Number(f.enrollment_fee_amount) : null,
   };
 }
 
@@ -223,8 +237,8 @@ function ConfigForm({
         </div>
         {form.fee_mode === "per_class" && (
           <p className="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-            Save this config first, then set the fee for each class in the{" "}
-            <strong>Per-Class Overrides</strong> table below.
+            Save this config, then set each class&apos;s application fee in the{" "}
+            <strong>Application Fee Overrides</strong> section at the bottom of this panel.
           </p>
         )}
       </div>
@@ -334,6 +348,49 @@ function ConfigForm({
           </div>
         )}
       </div>
+
+      <Separator />
+
+      {/* Enrollment Fee */}
+      <div>
+        <SectionTitle icon={<DollarSign className="size-3.5" />} title="Enrollment Fee" />
+        <div className="flex items-center gap-3 mb-4">
+          <Switch
+            checked={form.enrollment_fee_required}
+            onCheckedChange={(v) => set({ enrollment_fee_required: v })}
+          />
+          <Label className="text-sm">Require enrollment fee payment before creating student account</Label>
+        </div>
+        {form.enrollment_fee_required && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Fee Mode">
+              <Select value={form.enrollment_fee_mode} onValueChange={(v) => set({ enrollment_fee_mode: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="same_for_all">Same fee for all classes</SelectItem>
+                  <SelectItem value="per_class">Set fee per class (see overrides below)</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            {form.enrollment_fee_mode === "same_for_all" && (
+              <Field label="Enrollment Fee Amount (৳)">
+                <Input
+                  type="number" min="0"
+                  value={form.enrollment_fee_amount}
+                  onChange={(e) => set({ enrollment_fee_amount: e.target.value })}
+                  placeholder="e.g. 2000"
+                />
+              </Field>
+            )}
+          </div>
+        )}
+        {form.enrollment_fee_required && form.enrollment_fee_mode === "per_class" && (
+          <p className="mt-3 text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-md px-3 py-2">
+            Save this config, then set each class&apos;s enrollment fee in the{" "}
+            <strong>Enrollment Fee Overrides</strong> section at the bottom of this panel.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -345,12 +402,14 @@ function ClassOverrideAddRow({
   existingClasses,
   availableClasses,
   feeMode,
+  enrollmentFeeMode,
   onDone,
 }: {
   configId: number;
   existingClasses: string[];
   availableClasses: string[];
   feeMode: string;
+  enrollmentFeeMode: string;
   onDone: () => void;
 }) {
   const qc = useQueryClient();
@@ -369,6 +428,7 @@ function ClassOverrideAddRow({
         body: JSON.stringify({
           class_name: row.class_name,
           fee: row.fee !== "" ? Number(row.fee) : null,
+          enrollment_fee_amount: row.enrollment_fee_amount !== "" ? Number(row.enrollment_fee_amount) : null,
           test_day: row.test_day || null,
           test_type: row.test_type || null,
           max_written_marks: row.max_written_marks !== "" ? Number(row.max_written_marks) : null,
@@ -400,7 +460,7 @@ function ClassOverrideAddRow({
   return (
     <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
       <p className="text-xs font-medium text-muted-foreground">New class override</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 items-end">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 items-end">
         <div className="space-y-1 col-span-2 sm:col-span-1">
           <Label className="text-xs">Class</Label>
           <Select value={row.class_name} onValueChange={(v) => set({ class_name: v })}>
@@ -412,7 +472,7 @@ function ClassOverrideAddRow({
         </div>
         <div className="space-y-1">
           <Label className={`text-xs ${feeMode === "per_class" ? "text-amber-700 font-semibold" : ""}`}>
-            Fee (৳){feeMode === "per_class" ? " *" : ""}
+            App Fee (৳){feeMode === "per_class" ? " *" : ""}
           </Label>
           <Input
             className={`h-8 text-xs ${feeMode === "per_class" ? "border-amber-400 focus-visible:ring-amber-400" : ""}`}
@@ -420,6 +480,18 @@ function ClassOverrideAddRow({
             placeholder={feeMode === "per_class" ? "Required" : "—"}
             value={row.fee}
             onChange={(e) => set({ fee: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className={`text-xs ${enrollmentFeeMode === "per_class" ? "text-teal-700 font-semibold" : ""}`}>
+            Enroll Fee (৳){enrollmentFeeMode === "per_class" ? " *" : ""}
+          </Label>
+          <Input
+            className={`h-8 text-xs ${enrollmentFeeMode === "per_class" ? "border-teal-400 focus-visible:ring-teal-400" : ""}`}
+            type="number" min="0"
+            placeholder={enrollmentFeeMode === "per_class" ? "Required" : "—"}
+            value={row.enrollment_fee_amount}
+            onChange={(e) => set({ enrollment_fee_amount: e.target.value })}
           />
         </div>
         <div className="space-y-1">
@@ -658,6 +730,20 @@ function ConfigPanel({
                   : "Not enabled"}
               </p>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5 flex items-center gap-1">
+                <DollarSign className="size-3.5" /> Enrollment Fee
+              </p>
+              <p className="font-medium">
+                {cfg.enrollmentFeeRequired
+                  ? cfg.enrollmentFeeMode === "per_class"
+                    ? "Required · Per class (see overrides)"
+                    : cfg.enrollmentFeeAmount != null
+                      ? `Required · ৳${cfg.enrollmentFeeAmount} (all classes)`
+                      : "Required · Amount not set"
+                  : "Not required"}
+              </p>
+            </div>
           </div>
         ) : null}
       </div>
@@ -682,6 +768,7 @@ function ConfigPanel({
                 existingClasses={existingClassNames}
                 availableClasses={availableClasses}
                 feeMode={cfg.feeMode}
+                enrollmentFeeMode={cfg.enrollmentFeeMode}
                 onDone={() => setShowAddRow(false)}
               />
             )}
@@ -691,44 +778,110 @@ function ConfigPanel({
                 No class overrides — global settings apply to all classes.
               </p>
             ) : cfg.classConfigs.length > 0 ? (
-              <div className="rounded-md border overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b bg-muted/40">
-                      <th className="px-3 py-2 text-left font-medium">Class</th>
-                      <th className="px-3 py-2 text-left font-medium">Fee</th>
-                      <th className="px-3 py-2 text-left font-medium">Test Day</th>
-                      <th className="px-3 py-2 text-left font-medium">Type</th>
-                      <th className="px-3 py-2 text-left font-medium">W/V Marks</th>
-                      <th className="px-3 py-2 text-left font-medium">Result Day</th>
-                      <th className="px-3 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cfg.classConfigs.map((cc) => (
-                      <tr key={cc.id} className="border-b last:border-0 hover:bg-muted/20">
-                        <td className="px-3 py-2 font-medium">{cc.className}</td>
-                        <td className="px-3 py-2">{cc.fee != null ? `৳${cc.fee}` : "—"}</td>
-                        <td className="px-3 py-2">{cc.testDay ? fmt(cc.testDay) : "—"}</td>
-                        <td className="px-3 py-2">{cc.testType ?? "—"}</td>
-                        <td className="px-3 py-2">
-                          {(cc.maxWrittenMarks != null || cc.maxVivaMarks != null)
-                            ? `W:${cc.maxWrittenMarks ?? "—"} V:${cc.maxVivaMarks ?? "—"}`
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-2">{cc.resultDay ? fmt(cc.resultDay) : "—"}</td>
-                        <td className="px-3 py-2">
-                          <button
-                            onClick={() => setDeleteClassTarget({ id: cc.id, configId: cfg.id })}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-4">
+                {/* Application Fee sub-section */}
+                {cfg.feeMode === "per_class" && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1">
+                      <DollarSign className="size-3" /> Application Fee Overrides
+                    </p>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-amber-50/60">
+                            <th className="px-3 py-2 text-left font-medium">Class</th>
+                            <th className="px-3 py-2 text-left font-medium">Application Fee (৳)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cfg.classConfigs.map((cc) => (
+                            <tr key={cc.id} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="px-3 py-2 font-medium">{cc.className}</td>
+                              <td className="px-3 py-2">{cc.fee != null ? `৳${cc.fee}` : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Enrollment Fee sub-section */}
+                {cfg.enrollmentFeeRequired && cfg.enrollmentFeeMode === "per_class" && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide flex items-center gap-1">
+                      <DollarSign className="size-3" /> Enrollment Fee Overrides
+                    </p>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-teal-50/60">
+                            <th className="px-3 py-2 text-left font-medium">Class</th>
+                            <th className="px-3 py-2 text-left font-medium">Enrollment Fee (৳)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cfg.classConfigs.map((cc) => (
+                            <tr key={cc.id} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="px-3 py-2 font-medium">{cc.className}</td>
+                              <td className="px-3 py-2">{cc.enrollmentFeeAmount != null ? `৳${cc.enrollmentFeeAmount}` : "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Test & Result sub-section — only when at least one class has values */}
+                {cfg.classConfigs.some((cc) =>
+                  cc.testDay || cc.testType || cc.maxWrittenMarks != null || cc.maxVivaMarks != null || cc.resultDay
+                ) && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <ClipboardList className="size-3" /> Test & Result Overrides
+                    </p>
+                    <div className="rounded-md border overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b bg-muted/40">
+                            <th className="px-3 py-2 text-left font-medium">Class</th>
+                            <th className="px-3 py-2 text-left font-medium">Test Day</th>
+                            <th className="px-3 py-2 text-left font-medium">Type</th>
+                            <th className="px-3 py-2 text-left font-medium">W/V Marks</th>
+                            <th className="px-3 py-2 text-left font-medium">Result Day</th>
+                            <th className="px-3 py-2" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cfg.classConfigs.filter((cc) =>
+                            cc.testDay || cc.testType || cc.maxWrittenMarks != null || cc.maxVivaMarks != null || cc.resultDay
+                          ).map((cc) => (
+                            <tr key={cc.id} className="border-b last:border-0 hover:bg-muted/20">
+                              <td className="px-3 py-2 font-medium">{cc.className}</td>
+                              <td className="px-3 py-2">{cc.testDay ? fmt(cc.testDay) : "—"}</td>
+                              <td className="px-3 py-2">{cc.testType ?? "—"}</td>
+                              <td className="px-3 py-2">
+                                {(cc.maxWrittenMarks != null || cc.maxVivaMarks != null)
+                                  ? `W:${cc.maxWrittenMarks ?? "—"} V:${cc.maxVivaMarks ?? "—"}`
+                                  : "—"}
+                              </td>
+                              <td className="px-3 py-2">{cc.resultDay ? fmt(cc.resultDay) : "—"}</td>
+                              <td className="px-3 py-2">
+                                <button
+                                  onClick={() => setDeleteClassTarget({ id: cc.id, configId: cfg.id })}
+                                  className="text-muted-foreground hover:text-destructive"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>

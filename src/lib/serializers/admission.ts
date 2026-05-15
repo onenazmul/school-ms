@@ -67,6 +67,8 @@ export function serializeAdmission(a: Admission) {
     payment_status: a.paymentStatus,
     application_fee: a.applicationFee.toString(),
     payment_tracking_id: a.paymentTrackingId,
+    enrollment_payment_status: a.enrollmentPaymentStatus,
+    enrollment_payment_tracking_id: a.enrollmentPaymentTrackingId,
 
     student_photo: a.studentPhoto,
     student_signature: a.studentSignature,

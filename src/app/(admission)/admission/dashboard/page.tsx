@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   CheckCircle2, Clock, CreditCard, FileText, Receipt,
-  GraduationCap, AlertCircle, ChevronRight, AlertTriangle,
+  GraduationCap, AlertCircle, ChevronRight, AlertTriangle, ExternalLink,
 } from "lucide-react";
 
 type Admission = {
@@ -21,6 +21,9 @@ type Admission = {
   payment_status: string;
   application_fee: string;
   payment_tracking_id: string | null;
+  enrollment_payment_status: string;
+  enrollment_fee_required: boolean;
+  enrollment_fee_amount: number | null;
   username: string;
   created_at: string;
 };
@@ -84,10 +87,18 @@ export default function AdmissionDashboard() {
   }
 
   const { status, payment_status } = admission;
-  const applicationFee = Number(admission.application_fee) || 0;
-  const isFree         = applicationFee === 0;
-  const isPaid         = payment_status === "Paid";
-  const sc             = statusBadgeConfig(status, payment_status);
+  const applicationFee    = Number(admission.application_fee) || 0;
+  const isFree            = applicationFee === 0;
+  const isPaid            = payment_status === "Paid";
+  const sc                = statusBadgeConfig(status, payment_status);
+  const needsEnrollmentFee =
+    status === "Approved" &&
+    admission.enrollment_fee_required &&
+    admission.enrollment_payment_status === "Unpaid";
+  const enrollmentSubmitted =
+    status === "Approved" &&
+    admission.enrollment_fee_required &&
+    admission.enrollment_payment_status === "Payment Submitted";
 
   return (
     <div className="space-y-5 pt-2">
@@ -102,14 +113,22 @@ export default function AdmissionDashboard() {
 
       {/* Application status card */}
       {status === "Enrolled" ? (
-        <div className="rounded-xl bg-green-50 border border-green-200 p-4 space-y-1">
+        <div className="rounded-xl bg-green-50 border border-green-200 p-4 space-y-2">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="size-5 text-green-600 shrink-0" />
-            <p className="font-semibold text-green-800">Congratulations — Admitted!</p>
+            <p className="font-semibold text-green-800">Congratulations — Enrolled!</p>
           </div>
           <p className="text-sm text-green-700 pl-7">
-            Your admission has been approved. Contact the school office for enrollment details.
+            Your admission is confirmed. You can now access your student account.
           </p>
+          <a
+            href="/student/dashboard"
+            className="ml-7 inline-flex items-center gap-1.5 text-xs font-semibold text-green-800 underline underline-offset-2"
+          >
+            <GraduationCap className="size-3.5" />
+            Go to Student Panel
+            <ExternalLink className="size-3 opacity-60" />
+          </a>
         </div>
       ) : status === "Rejected" ? (
         <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-1">
@@ -219,6 +238,37 @@ export default function AdmissionDashboard() {
               Pay Application Fee — ৳{applicationFee}
             </a>
           </Button>
+        </div>
+      )}
+
+      {/* Enrollment fee section */}
+      {needsEnrollmentFee && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="size-5 text-amber-500 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Action Required — Pay Enrollment Fee</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Your application is approved! Pay the enrollment fee
+                {admission.enrollment_fee_amount ? ` of ৳${admission.enrollment_fee_amount}` : ""} to confirm your seat.
+              </p>
+            </div>
+          </div>
+          <Button className="w-full bg-amber-600 hover:bg-amber-700 text-white gap-2" asChild>
+            <a href="/admission/application/enrollment-payment">
+              <CreditCard className="size-4" />
+              Pay Enrollment Fee{admission.enrollment_fee_amount ? ` — ৳${admission.enrollment_fee_amount}` : ""}
+            </a>
+          </Button>
+        </div>
+      )}
+      {enrollmentSubmitted && (
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 flex items-center gap-3">
+          <Clock className="size-5 text-blue-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Enrollment Fee — Under Verification</p>
+            <p className="text-xs text-blue-700 mt-0.5">Your proof has been submitted and is being reviewed.</p>
+          </div>
         </div>
       )}
 

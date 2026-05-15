@@ -52,6 +52,9 @@ export async function PATCH(
   if (body.marks_threshold_enabled !== undefined) data.marksThresholdEnabled = Boolean(body.marks_threshold_enabled);
   if (body.marks_pass_threshold    !== undefined) data.marksPassThreshold    = body.marks_pass_threshold != null ? Number(body.marks_pass_threshold) : null;
   if (body.marks_threshold_action  !== undefined) data.marksThresholdAction  = String(body.marks_threshold_action);
+  if (body.enrollment_fee_mode     !== undefined) data.enrollmentFeeMode     = String(body.enrollment_fee_mode);
+  if (body.enrollment_fee_required !== undefined) data.enrollmentFeeRequired = Boolean(body.enrollment_fee_required);
+  if (body.enrollment_fee_amount   !== undefined) data.enrollmentFeeAmount   = body.enrollment_fee_amount != null ? Number(body.enrollment_fee_amount) : null;
 
   const config = await db.admissionConfig.update({
     where: { id: Number(id) },

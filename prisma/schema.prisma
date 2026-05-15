@@ -167,6 +167,11 @@ model Admission {
   applicationFee    Decimal @default(0) @db.Decimal(10, 2)
   paymentTrackingId String?
 
+  // Enrollment fee (separate from application fee)
+  // Unpaid | Payment Submitted | Paid
+  enrollmentPaymentStatus     String  @default("Unpaid")
+  enrollmentPaymentTrackingId String?
+
   studentPhoto      String?
   studentSignature  String?
 
@@ -209,6 +214,8 @@ model Student {
   receipts           Receipt[]
   results            ExamResult[]
   paymentSubmissions PaymentSubmission[]
+  yearEndResults     YearEndResult[]
+  promotionRecords   PromotionRecord[]
 }
 
 model FeeConfig {
@@ -246,7 +253,8 @@ model Bill {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  receiptItems ReceiptItem[]
+  receiptItems       ReceiptItem[]
+  paymentSubmissions PaymentSubmission[]
 }
 
 model Receipt {
@@ -285,8 +293,10 @@ model PaymentSubmission {
   admission   Admission? @relation(fields: [admissionId], references: [id])
   studentId   String?
   student     Student?   @relation(fields: [studentId], references: [id])
+  billId      String?
+  bill        Bill?      @relation(fields: [billId], references: [id])
 
-  // admission | exam_fee
+  // admission | enrollment | exam_fee
   paymentContext String
   // bkash | rocket | bank_transfer
   method        String
@@ -375,6 +385,12 @@ model AdmissionConfig {
   // "auto_enroll" | "flag_review"
   marksThresholdAction  String  @default("flag_review")
 
+  // Enrollment fee (paid after approval, before student account is created)
+  // "same_for_all" | "per_class"
+  enrollmentFeeMode     String   @default("same_for_all")
+  enrollmentFeeRequired Boolean  @default(false)
+  enrollmentFeeAmount   Decimal? @db.Decimal(10, 2)
+
   classConfigs ClassAdmissionConfig[]
   admissions   Admission[]
 
@@ -390,12 +406,13 @@ model ClassAdmissionConfig {
   // matches Admission.className
   className String
 
-  fee             Decimal? @db.Decimal(10, 2)
-  testDay         DateTime?
-  testType        String?   // "written" | "viva" | "both"
-  maxWrittenMarks Float?
-  maxVivaMarks    Float?
-  resultDay       DateTime?
+  fee                 Decimal? @db.Decimal(10, 2)
+  enrollmentFeeAmount Decimal? @db.Decimal(10, 2)
+  testDay             DateTime?
+  testType            String?   // "written" | "viva" | "both"
+  maxWrittenMarks     Float?
+  maxVivaMarks        Float?
+  resultDay           DateTime?
 }
 
 model AdmissionMark {
@@ -480,4 +497,44 @@ model ActivityLog {
   @@index([module])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// YEAR-END RESULTS & PROMOTION HISTORY
+// ─────────────────────────────────────────────
+
+model YearEndResult {
+  id           String  @id
+  studentId    String
+  student      Student @relation(fields: [studentId], references: [id])
+
+  academicYear String
+  // Pass | Fail | Supplementary
+  result       String
+  nextClass    String?
+  notes        String?   @db.Text
+  decidedBy    String?
+  decidedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, academicYear])
+}
+
+model PromotionRecord {
+  id               String  @id
+  studentId        String
+  student          Student @relation(fields: [studentId], references: [id])
+
+  fromClass        String
+  fromAcademicYear String
+  toClass          String
+  toAcademicYear   String
+  // Pass | Fail | Supplementary
+  result           String
+  createdBy        String?
+  notes            String? @db.Text
+
+  createdAt DateTime @default(now())
 }

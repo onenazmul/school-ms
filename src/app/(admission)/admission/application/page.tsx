@@ -69,6 +69,9 @@ type Admission = {
   payment_status: string;
   application_fee: string;
   payment_tracking_id: string | null;
+  enrollment_payment_status: string;
+  enrollment_fee_required: boolean;
+  enrollment_fee_amount: number | null;
   username: string;
   created_at: string;
 
@@ -97,11 +100,17 @@ function StatusBanner({ admission }: { admission: Admission }) {
 
   if (status === "Enrolled") {
     return (
-      <div className="rounded-xl bg-green-50 border border-green-200 p-4 flex items-center gap-3">
-        <CheckCheck className="size-5 text-green-600 shrink-0" />
-        <div>
-          <p className="text-sm font-semibold text-green-800">Congratulations — Admitted!</p>
-          <p className="text-xs text-green-700 mt-0.5">Your admission has been approved. Welcome to the school.</p>
+      <div className="rounded-xl bg-green-50 border border-green-200 p-4 flex items-start gap-3">
+        <CheckCheck className="size-5 text-green-600 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-green-800">Congratulations — Enrolled!</p>
+          <p className="text-xs text-green-700 mt-0.5">Your admission has been approved and your student account is ready.</p>
+          <a
+            href="/student/dashboard"
+            className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-green-800 underline underline-offset-2"
+          >
+            Go to Student Panel →
+          </a>
         </div>
       </div>
     );
@@ -120,12 +129,49 @@ function StatusBanner({ admission }: { admission: Admission }) {
   }
 
   if (status === "Approved") {
+    const { enrollment_fee_required, enrollment_payment_status, enrollment_fee_amount } = admission;
+
+    if (enrollment_fee_required && enrollment_payment_status === "Payment Submitted") {
+      return (
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 flex items-center gap-3">
+          <Clock className="size-5 text-blue-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Enrollment Fee — Under Review</p>
+            <p className="text-xs text-blue-700 mt-0.5">We received your enrollment fee proof and are reviewing it. We will notify you once verified.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (enrollment_fee_required && enrollment_payment_status !== "Paid") {
+      return (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
+          <CreditCard className="size-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Action Required — Pay Enrollment Fee</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Your application has been approved! Pay the enrollment fee
+              {enrollment_fee_amount ? ` of ৳${enrollment_fee_amount}` : ""} to confirm your seat.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-xl bg-teal-50 border border-teal-200 p-4 flex items-center gap-3">
         <CheckCircle2 className="size-5 text-teal-600 shrink-0" />
         <div>
-          <p className="text-sm font-semibold text-teal-800">Application Approved</p>
-          <p className="text-xs text-teal-700 mt-0.5">Your application has been approved. Further instructions will be communicated soon.</p>
+          <p className="text-sm font-semibold text-teal-800">
+            {enrollment_fee_required && enrollment_payment_status === "Paid"
+              ? "Enrollment Fee Verified — Awaiting Confirmation"
+              : "Application Approved"}
+          </p>
+          <p className="text-xs text-teal-700 mt-0.5">
+            {enrollment_fee_required && enrollment_payment_status === "Paid"
+              ? "Your enrollment fee has been verified. The school will finalize your enrollment shortly."
+              : "Your application has been approved. Further instructions will be communicated soon."}
+          </p>
         </div>
       </div>
     );
@@ -270,6 +316,11 @@ export default function ApplicationPage() {
   const applicationFee = Number(admission.application_fee) || 0;
   const isVerifiedPaid = admission.payment_status === "Paid";
 
+  const needsEnrollmentFee =
+    admission.status === "Approved" &&
+    admission.enrollment_fee_required &&
+    admission.enrollment_payment_status === "Unpaid";
+
   const presentAddress = [
     admission.present_village, admission.present_post,
     admission.present_upazilla, admission.present_zilla, admission.present_post_code,
@@ -406,6 +457,26 @@ export default function ApplicationPage() {
               </Button>
             )}
           </>
+        )}
+        {needsEnrollmentFee && (
+          <Button
+            className="w-full h-12 text-base bg-amber-600 hover:bg-amber-700 text-white gap-2 font-semibold"
+            onClick={() => router.push("/admission/application/enrollment-payment")}
+          >
+            <CreditCard className="size-5" />
+            Pay Enrollment Fee
+            {admission.enrollment_fee_amount ? ` — ৳${admission.enrollment_fee_amount}` : ""}
+          </Button>
+        )}
+        {admission.status === "Enrolled" && (
+          <Button
+            className="w-full h-12 text-base bg-indigo-600 hover:bg-indigo-700 text-white gap-2 font-semibold"
+            asChild
+          >
+            <a href="/student/dashboard">
+              <GraduationCap className="size-5" /> Go to Student Panel
+            </a>
+          </Button>
         )}
         {isVerifiedPaid && (
           <Button variant="outline" className="w-full gap-2" asChild>

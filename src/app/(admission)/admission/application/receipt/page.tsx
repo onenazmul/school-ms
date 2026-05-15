@@ -44,11 +44,14 @@ type Admission = {
   application_fee: string;
   payment_status: string;
   payment_tracking_id: string | null;
+  enrollment_payment_status: string;
+  enrollment_fee_amount: number | null;
   username: string;
   created_at: string;
   updated_at: string;
 
   payment_submission: PaymentSubmission | null;
+  enrollment_payment_submission: PaymentSubmission | null;
 };
 
 type SchoolInfo = { name: string; phone: string };
@@ -71,6 +74,60 @@ function Row({ label, value }: { label: string; value?: string | null }) {
       <td className="py-2 text-sm text-muted-foreground pr-4 w-40 align-top">{label}</td>
       <td className="py-2 text-sm font-medium text-right">{value || "—"}</td>
     </tr>
+  );
+}
+
+function PaymentBlock({
+  ps,
+  label,
+  accentClass,
+  headerBg,
+  rowBg,
+}: {
+  ps: PaymentSubmission;
+  label: string;
+  accentClass: string;
+  headerBg: string;
+  rowBg: string;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
+        {label}
+      </p>
+      <div className="rounded-xl border overflow-hidden">
+        <div className={`${headerBg} px-4 py-2.5 grid grid-cols-3 gap-2`}>
+          <span className="text-xs font-semibold text-white">Method</span>
+          <span className="text-xs font-semibold text-white">Reference</span>
+          <span className="text-xs font-semibold text-white text-right">Amount</span>
+        </div>
+        <div className={`px-4 py-3 grid grid-cols-3 gap-2 ${rowBg}`}>
+          <span className="text-sm font-medium">{fmtMethod(ps.method)}</span>
+          <span className="text-sm font-mono text-muted-foreground break-all">
+            {ps.method === "bank_transfer"
+              ? (ps.deposit_slip_no || ps.account_holder_name || "—")
+              : (ps.transaction_id || "—")}
+          </span>
+          <span className={`text-sm font-bold text-right ${accentClass}`}>
+            ৳{ps.amount_sent.toLocaleString("en-IN")}
+          </span>
+        </div>
+      </div>
+      <table className="w-full mt-3">
+        <tbody>
+          {ps.method !== "bank_transfer" && ps.phone_number && (
+            <Row label="Phone Used"      value={ps.phone_number} />
+          )}
+          {ps.method === "bank_transfer" && ps.account_holder_name && (
+            <Row label="Account Holder"  value={ps.account_holder_name} />
+          )}
+          {ps.method === "bank_transfer" && ps.branch && (
+            <Row label="Branch"          value={ps.branch} />
+          )}
+          <Row label="Payment Date"      value={fmtDate(ps.payment_date)} />
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -140,18 +197,26 @@ export default function ReceiptPage() {
     );
   }
 
-  const ps = admission.payment_submission;
-  const applicationFee = Number(admission.application_fee) || 0;
-  const amountPaid     = ps ? ps.amount_sent : applicationFee;
-  const guardianName   = admission.guardian_name ?? admission.father_name_en ?? "—";
-  const address        = [admission.present_village, admission.present_upazilla, admission.present_zilla]
-    .filter(Boolean).join(", ");
+  const ps  = admission.payment_submission;
+  const eps = admission.enrollment_payment_submission;
 
-  const classLabel = [admission.class_name, admission.session_name, admission.division]
+  const applicationFee   = Number(admission.application_fee) || 0;
+  const enrollmentFee    = admission.enrollment_fee_amount ?? (eps ? eps.amount_sent : 0);
+  const admissionPaid    = ps  ? ps.amount_sent  : applicationFee;
+  const enrollmentPaid   = eps ? eps.amount_sent : 0;
+  const totalPaid        = admissionPaid + enrollmentPaid;
+  const totalFee         = applicationFee + (eps ? enrollmentFee : 0);
+
+  const guardianName = admission.guardian_name ?? admission.father_name_en ?? "—";
+  const address      = [admission.present_village, admission.present_upazilla, admission.present_zilla]
+    .filter(Boolean).join(", ");
+  const classLabel   = [admission.class_name, admission.session_name, admission.division]
     .filter(Boolean).join(" · ");
 
   const receiptNo = ps?.receipt_number
     ?? (admission.payment_tracking_id ? `RCP-${admission.payment_tracking_id.slice(0, 8).toUpperCase()}` : "—");
+
+  const lastVerified = eps?.verified_at ?? ps?.verified_at ?? admission.updated_at;
 
   return (
     <div className="space-y-4 pt-2">
@@ -188,7 +253,7 @@ export default function ReceiptPage() {
             <p className="font-bold text-sm tracking-wide">PAYMENT RECEIPT</p>
             <p className="text-indigo-200 text-xs mt-0.5 font-mono">Receipt No: {receiptNo}</p>
             <p className="text-indigo-200 text-xs font-mono">
-              Date: {fmtDate(ps?.verified_at ?? admission.updated_at)}
+              Date: {fmtDate(lastVerified)}
             </p>
           </div>
         </div>
@@ -197,7 +262,9 @@ export default function ReceiptPage() {
         <div className="bg-green-50 border-b border-green-100 px-6 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="size-4 text-green-600" />
-            <span className="text-sm font-semibold text-green-800">Application Fee Receipt — Payment Verified</span>
+            <span className="text-sm font-semibold text-green-800">
+              {eps ? "Application & Enrollment Fee Receipt" : "Application Fee Receipt"} — Payment Verified
+            </span>
           </div>
           {ps?.verified_at && (
             <span className="text-xs text-green-700">Verified {fmtDate(ps.verified_at)}</span>
@@ -229,50 +296,26 @@ export default function ReceiptPage() {
             </table>
           </div>
 
-          {/* PAYMENT DETAILS */}
+          {/* APPLICATION FEE PAYMENT */}
           {ps && (
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
-                Payment Details
-              </p>
-              <div className="rounded-xl border overflow-hidden">
-                {/* table header */}
-                <div className="bg-indigo-600 px-4 py-2.5 grid grid-cols-3 gap-2">
-                  <span className="text-xs font-semibold text-white">Method</span>
-                  <span className="text-xs font-semibold text-white">Reference</span>
-                  <span className="text-xs font-semibold text-white text-right">Amount</span>
-                </div>
-                {/* table row */}
-                <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-indigo-50/50">
-                  <span className="text-sm font-medium">{fmtMethod(ps.method)}</span>
-                  <span className="text-sm font-mono text-muted-foreground break-all">
-                    {ps.method === "bank_transfer"
-                      ? (ps.deposit_slip_no || ps.account_holder_name || "—")
-                      : (ps.transaction_id || "—")}
-                  </span>
-                  <span className="text-sm font-bold text-green-700 text-right">৳{ps.amount_sent.toLocaleString("en-IN")}</span>
-                </div>
-              </div>
+            <PaymentBlock
+              ps={ps}
+              label="Application Fee Payment"
+              accentClass="text-green-700"
+              headerBg="bg-indigo-600"
+              rowBg="bg-indigo-50/50"
+            />
+          )}
 
-              {/* Extra fields */}
-              <table className="w-full mt-3">
-                <tbody>
-                  {ps.method !== "bank_transfer" && ps.phone_number && (
-                    <Row label="Phone Used"   value={ps.phone_number} />
-                  )}
-                  {ps.method === "bank_transfer" && ps.account_holder_name && (
-                    <Row label="Account Holder" value={ps.account_holder_name} />
-                  )}
-                  {ps.method === "bank_transfer" && ps.branch && (
-                    <Row label="Branch"        value={ps.branch} />
-                  )}
-                  <Row label="Payment Date"   value={fmtDate(ps.payment_date)} />
-                  {ps.verified_by && (
-                    <Row label="Verified By"  value={ps.verified_by} />
-                  )}
-                </tbody>
-              </table>
-            </div>
+          {/* ENROLLMENT FEE PAYMENT */}
+          {eps && (
+            <PaymentBlock
+              ps={eps}
+              label="Enrollment Fee Payment"
+              accentClass="text-teal-700"
+              headerBg="bg-teal-600"
+              rowBg="bg-teal-50/50"
+            />
           )}
 
           {/* FEE SUMMARY */}
@@ -281,32 +324,46 @@ export default function ReceiptPage() {
               Fee Summary
             </p>
             <div className="flex justify-between items-center py-1.5 text-sm border-b">
-              <span className="text-muted-foreground">Fee Type</span>
-              <span className="font-medium">Admission Application Fee</span>
-            </div>
-            <div className="flex justify-between items-center py-1.5 text-sm border-b">
-              <span className="text-muted-foreground">Total Fee</span>
+              <span className="text-muted-foreground">Application Fee</span>
               <span className="font-medium">৳{applicationFee.toLocaleString("en-IN")}</span>
             </div>
             <div className="flex justify-between items-center py-1.5 text-sm border-b">
-              <span className="text-muted-foreground">Amount Paid</span>
-              <span className="font-semibold text-green-700">৳{amountPaid.toLocaleString("en-IN")}</span>
+              <span className="text-muted-foreground">Application Fee Paid</span>
+              <span className="font-semibold text-green-700">৳{admissionPaid.toLocaleString("en-IN")}</span>
             </div>
+            {eps && (
+              <>
+                <div className="flex justify-between items-center py-1.5 text-sm border-b">
+                  <span className="text-muted-foreground">Enrollment Fee</span>
+                  <span className="font-medium">৳{enrollmentFee.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5 text-sm border-b">
+                  <span className="text-muted-foreground">Enrollment Fee Paid</span>
+                  <span className="font-semibold text-teal-700">৳{enrollmentPaid.toLocaleString("en-IN")}</span>
+                </div>
+              </>
+            )}
             <div className="flex justify-between items-center pt-2.5 mt-1">
-              <span className="font-semibold">Balance Due</span>
-              <span className={`font-bold text-lg ${Math.max(0, applicationFee - amountPaid) > 0 ? "text-red-700" : "text-green-700"}`}>
-                ৳{Math.max(0, applicationFee - amountPaid).toLocaleString("en-IN")}
+              <span className="font-semibold">Total Paid</span>
+              <span className="font-bold text-lg text-green-700">
+                ৳{totalPaid.toLocaleString("en-IN")}
               </span>
             </div>
+            {totalFee > 0 && totalPaid < totalFee && (
+              <div className="flex justify-between items-center pt-1">
+                <span className="text-sm text-muted-foreground">Balance Due</span>
+                <span className="font-bold text-red-700">
+                  ৳{(totalFee - totalPaid).toLocaleString("en-IN")}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Verification + signature */}
+          {/* Signature */}
           <div className="flex items-end justify-between gap-4">
-            <div className="text-xs text-muted-foreground space-y-0.5">
-              {ps?.verified_by && <p>Verified By: {ps.verified_by}</p>}
-              {ps?.verified_at && <p>Verified On: {fmtDate(ps.verified_at)}</p>}
-              <p>Application Submitted: {fmtDate(admission.created_at)}</p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Application Submitted: {fmtDate(admission.created_at)}
+            </p>
             <div className="text-center w-32">
               <div className="border-b border-gray-400 mb-1.5 h-6" />
               <p className="text-[10px] text-muted-foreground">Authorized Signatory</p>

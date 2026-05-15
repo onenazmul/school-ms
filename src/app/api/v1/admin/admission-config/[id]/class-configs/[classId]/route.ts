@@ -20,13 +20,14 @@ export async function PATCH(
   }
 
   const data: Record<string, unknown> = {};
-  if (body.class_name         !== undefined) data.className        = String(body.class_name);
-  if (body.fee                !== undefined) data.fee              = body.fee != null ? Number(body.fee) : null;
-  if (body.test_day           !== undefined) data.testDay          = body.test_day ? new Date(String(body.test_day)) : null;
-  if (body.test_type          !== undefined) data.testType         = body.test_type ? String(body.test_type) : null;
-  if (body.max_written_marks  !== undefined) data.maxWrittenMarks  = body.max_written_marks != null ? Number(body.max_written_marks) : null;
-  if (body.max_viva_marks     !== undefined) data.maxVivaMarks     = body.max_viva_marks != null ? Number(body.max_viva_marks) : null;
-  if (body.result_day         !== undefined) data.resultDay        = body.result_day ? new Date(String(body.result_day)) : null;
+  if (body.class_name              !== undefined) data.className            = String(body.class_name);
+  if (body.fee                     !== undefined) data.fee                  = body.fee != null ? Number(body.fee) : null;
+  if (body.enrollment_fee_amount   !== undefined) data.enrollmentFeeAmount  = body.enrollment_fee_amount != null ? Number(body.enrollment_fee_amount) : null;
+  if (body.test_day                !== undefined) data.testDay              = body.test_day ? new Date(String(body.test_day)) : null;
+  if (body.test_type               !== undefined) data.testType             = body.test_type ? String(body.test_type) : null;
+  if (body.max_written_marks       !== undefined) data.maxWrittenMarks      = body.max_written_marks != null ? Number(body.max_written_marks) : null;
+  if (body.max_viva_marks          !== undefined) data.maxVivaMarks         = body.max_viva_marks != null ? Number(body.max_viva_marks) : null;
+  if (body.result_day              !== undefined) data.resultDay            = body.result_day ? new Date(String(body.result_day)) : null;
 
   const classConfig = await db.classAdmissionConfig.update({
     where: { id: Number(classId) },
