@@ -1,0 +1,75 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/auth/helpers";
+
+function serialize(fee: {
+  id: string;
+  name: string;
+  amount: unknown;
+  type: string;
+  applicableClasses: unknown;
+  dueDay: number | null;
+  lateFee: unknown;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: fee.id,
+    name: fee.name,
+    amount: Number(fee.amount),
+    type: fee.type,
+    applicable_classes: fee.applicableClasses as string[],
+    due_day: fee.dueDay,
+    late_fee: fee.lateFee != null ? Number(fee.lateFee) : null,
+    is_active: fee.isActive,
+  };
+}
+
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
+
+    const fees = await db.feeConfig.findMany({ orderBy: { createdAt: "asc" } });
+    return NextResponse.json({ fees: fees.map(serialize) });
+  } catch (err) {
+    console.error("GET /api/v1/admin/fee-configs:", err);
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
+    if ((session.user as any)?.role !== "admin")
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+    let body: Record<string, unknown>;
+    try { body = await req.json(); } catch {
+      return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
+    }
+
+    const { name, amount, type, applicable_classes, due_day, late_fee } = body;
+    if (!name || !amount || !type || !Array.isArray(applicable_classes) || applicable_classes.length === 0)
+      return NextResponse.json({ message: "name, amount, type, applicable_classes are required" }, { status: 422 });
+
+    const fee = await db.feeConfig.create({
+      data: {
+        id: crypto.randomUUID(),
+        name: String(name),
+        amount: Number(amount),
+        type: String(type),
+        applicableClasses: applicable_classes,
+        dueDay: due_day != null ? Number(due_day) : null,
+        lateFee: late_fee != null ? Number(late_fee) : null,
+        isActive: true,
+      },
+    });
+    return NextResponse.json({ fee: serialize(fee) }, { status: 201 });
+  } catch (err) {
+    console.error("POST /api/v1/admin/fee-configs:", err);
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+  }
+}

@@ -1,6 +1,6 @@
 // app/(student-auth)/layout.tsx
 import { redirect } from "next/navigation";
-import { getStudentSession } from "@/lib/auth/student";
+import { getSession } from "@/lib/auth/helpers";
 
 export default async function StudentAuthLayout({
   children,
@@ -8,7 +8,7 @@ export default async function StudentAuthLayout({
   children: React.ReactNode;
 }) {
   // If already signed in as student, skip login
-  const session = await getStudentSession();
+  const session = await getSession();
   if (session) redirect("/student/dashboard");
 
   return (

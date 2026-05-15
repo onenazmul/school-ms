@@ -1,17 +1,14 @@
 "use client";
-// app/(admission)/admission/dashboard/page.tsx
 
 import { useEffect, useState } from "react";
-import { useStudentSession } from "@/lib/auth/student-client";
-import { api } from "@/lib/api/client";
-import { EP } from "@/lib/api/endpoints";
+import { useSession } from "@/lib/auth/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   CheckCircle2, Clock, CreditCard, FileText, Receipt,
-  GraduationCap, AlertCircle, ChevronRight,
+  GraduationCap, AlertCircle, ChevronRight, AlertTriangle,
 } from "lucide-react";
 
 type Admission = {
@@ -21,35 +18,43 @@ type Admission = {
   gender: string;
   dob: string;
   status: string;
+  payment_status: string;
   application_fee: string;
   payment_tracking_id: string | null;
   username: string;
   created_at: string;
 };
 
-function isPaid(a: Admission) {
-  return a.payment_tracking_id !== null &&
-    a.payment_tracking_id !== "4" &&
-    a.payment_tracking_id !== "";
-}
-
-function statusConfig(status: string) {
+function statusBadgeConfig(status: string, paymentStatus: string) {
+  if (status === "Enrolled")
+    return { label: "Enrolled",         cls: "bg-green-50 text-green-700 border-green-200" };
   if (status === "Approved")
-    return { label: "Approved",     cls: "bg-green-50 text-green-700 border-green-200" };
+    return { label: "Approved",         cls: "bg-teal-50 text-teal-700 border-teal-200" };
   if (status === "Rejected")
-    return { label: "Rejected",     cls: "bg-red-50 text-red-700 border-red-200" };
-  return   { label: "Under Review", cls: "bg-amber-50 text-amber-700 border-amber-200" };
+    return { label: "Not Selected",     cls: "bg-red-50 text-red-700 border-red-200" };
+  if (status === "Awaiting Test")
+    return { label: "Awaiting Test",    cls: "bg-purple-50 text-purple-700 border-purple-200" };
+  if (status === "Under Review")
+    return { label: "Under Review",     cls: "bg-amber-50 text-amber-700 border-amber-200" };
+  if (paymentStatus === "Payment Submitted")
+    return { label: "Payment Review",   cls: "bg-blue-50 text-blue-700 border-blue-200" };
+  // Pending + Unpaid
+  return     { label: "Payment Pending", cls: "bg-orange-50 text-orange-700 border-orange-200" };
 }
 
 export default function AdmissionDashboard() {
-  const { session, loading: sessionLoading } = useStudentSession();
+  const { data: __sd, isPending: sessionLoading } = useSession();
+  const session = __sd?.user as any;
   const [admission, setAdmission] = useState<Admission | null>(null);
   const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
     if (!session?.id || sessionLoading) return;
-    api
-      .get<{ admission: Admission }>(EP.ADMISSION(session.id), session.laravelToken)
+    fetch("/api/v1/admissions/me")
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json()).message ?? "Could not load application");
+        return r.json();
+      })
       .then((r) => setAdmission(r.admission))
       .catch((err) => toast.error(err.message ?? "Could not load application"))
       .finally(() => setFetching(false));
@@ -78,9 +83,11 @@ export default function AdmissionDashboard() {
     );
   }
 
-  const paid  = isPaid(admission);
-  const sc    = statusConfig(admission.status);
-  const applicationFee = Number(admission.application_fee) || 100;
+  const { status, payment_status } = admission;
+  const applicationFee = Number(admission.application_fee) || 0;
+  const isFree         = applicationFee === 0;
+  const isPaid         = payment_status === "Paid";
+  const sc             = statusBadgeConfig(status, payment_status);
 
   return (
     <div className="space-y-5 pt-2">
@@ -94,65 +101,119 @@ export default function AdmissionDashboard() {
       </div>
 
       {/* Application status card */}
-      {admission.status === "Approved" ? (
+      {status === "Enrolled" ? (
         <div className="rounded-xl bg-green-50 border border-green-200 p-4 space-y-1">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="size-5 text-green-600 shrink-0" />
-            <p className="font-semibold text-green-800">Application Approved!</p>
+            <p className="font-semibold text-green-800">Congratulations — Admitted!</p>
           </div>
           <p className="text-sm text-green-700 pl-7">
-            Congratulations! Contact the school office for your enrollment details.
+            Your admission has been approved. Contact the school office for enrollment details.
           </p>
         </div>
-      ) : admission.status === "Rejected" ? (
+      ) : status === "Rejected" ? (
         <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-1">
           <div className="flex items-center gap-2">
             <AlertCircle className="size-5 text-red-600 shrink-0" />
-            <p className="font-semibold text-red-800">Application Not Approved</p>
+            <p className="font-semibold text-red-800">Application Not Selected</p>
           </div>
           <p className="text-sm text-red-700 pl-7">
             Please contact the school office for more information.
+          </p>
+        </div>
+      ) : status === "Under Review" ? (
+        <div className="rounded-xl bg-amber-50 border border-amber-100 p-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <Clock className="size-5 text-amber-600 shrink-0" />
+            <p className="font-semibold text-amber-800">Application Under Review</p>
+          </div>
+          <p className="text-sm text-amber-700 pl-7">
+            The school is reviewing your application. We will notify you about any updates.
+          </p>
+        </div>
+      ) : status === "Pending" ? (
+        <div className="rounded-xl bg-orange-50 border border-orange-200 p-4 space-y-1">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-5 text-orange-500 shrink-0" />
+            <p className="font-semibold text-orange-800">Action Required — Complete Payment</p>
+          </div>
+          <p className="text-sm text-orange-700 pl-7">
+            Your application is pending. Pay the application fee of{" "}
+            <strong>৳{applicationFee}</strong> to be eligible for review.
           </p>
         </div>
       ) : (
         <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-4 space-y-1">
           <div className="flex items-center gap-2">
             <Clock className="size-5 text-indigo-600 shrink-0" />
-            <p className="font-semibold text-indigo-800">Application Under Review</p>
+            <p className="font-semibold text-indigo-800">{status}</p>
           </div>
-          <p className="text-sm text-indigo-700 pl-7">
-            The school will review your application and update the status.
-          </p>
         </div>
       )}
 
-      {/* Payment status */}
-      {paid ? (
+      {/* Payment / fee section */}
+      {isFree ? (
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 flex items-center gap-3">
+          <CheckCircle2 className="size-5 text-blue-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">No Application Fee Required</p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              Your application has been submitted and is under review.
+            </p>
+          </div>
+        </div>
+      ) : isPaid ? (
         <div className="rounded-xl bg-green-50 border border-green-200 p-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="size-5 text-green-600 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-green-800">Fee Paid</p>
-              <p className="text-xs text-green-700">Application fee of ৳{applicationFee} received.</p>
+              <p className="text-sm font-semibold text-green-800">Fee Paid — ৳{applicationFee}</p>
+              <p className="text-xs text-green-700">Application fee verified by the school.</p>
             </div>
           </div>
           <Button size="sm" variant="outline" asChild className="shrink-0">
             <a href="/admission/application/receipt">View Receipt</a>
           </Button>
         </div>
-      ) : (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-3">
+      ) : payment_status === "Payment Submitted" ? (
+        <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 flex items-center gap-3">
+          <Clock className="size-5 text-blue-600 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800">Payment Under Verification</p>
+            <p className="text-xs text-blue-700 mt-0.5">
+              We received your payment proof and are reviewing it. Receipt will be available once verified.
+            </p>
+          </div>
+        </div>
+      ) : payment_status === "Fake Payment Proof" ? (
+        <div className="rounded-xl bg-red-50 border border-red-200 p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <Clock className="size-5 text-amber-600 shrink-0" />
+            <AlertTriangle className="size-5 text-red-600 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-amber-800">Payment Pending</p>
-              <p className="text-xs text-amber-700">Pay the ৳{applicationFee} application fee to complete your submission.</p>
+              <p className="text-sm font-semibold text-red-800">Payment Could Not Be Verified</p>
+              <p className="text-xs text-red-700">Please resubmit a valid payment proof.</p>
             </div>
           </div>
-          <Button
-            className="w-full bg-green-600 hover:bg-green-700 text-white gap-2"
-            asChild
-          >
+          <Button className="w-full bg-green-600 hover:bg-green-700 text-white gap-2" asChild>
+            <a href="/admission/application/payment">
+              <CreditCard className="size-4" />
+              Resubmit Payment Proof
+            </a>
+          </Button>
+        </div>
+      ) : (
+        // Unpaid + Pending — needs to pay
+        <div className="rounded-xl bg-orange-50 border border-orange-200 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="size-5 text-orange-500 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-orange-800">Payment Required</p>
+              <p className="text-xs text-orange-700">
+                Pay ৳{applicationFee} to make your application eligible for review.
+              </p>
+            </div>
+          </div>
+          <Button className="w-full bg-green-600 hover:bg-green-700 text-white gap-2" asChild>
             <a href="/admission/application">
               <CreditCard className="size-4" />
               Pay Application Fee — ৳{applicationFee}
@@ -183,7 +244,7 @@ export default function AdmissionDashboard() {
       </div>
 
       {/* Quick links */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${isPaid ? "grid-cols-2" : "grid-cols-1"}`}>
         <a
           href="/admission/application"
           className="flex items-center justify-between rounded-xl border bg-background p-4 hover:bg-muted/50 transition-colors group"
@@ -192,23 +253,25 @@ export default function AdmissionDashboard() {
             <div className="size-8 rounded-lg bg-indigo-50 flex items-center justify-center">
               <FileText className="size-4 text-indigo-600" />
             </div>
-            <span className="text-sm font-medium">Application</span>
+            <span className="text-sm font-medium">My Application</span>
           </div>
           <ChevronRight className="size-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
         </a>
 
-        <a
-          href="/admission/application/receipt"
-          className="flex items-center justify-between rounded-xl border bg-background p-4 hover:bg-muted/50 transition-colors group"
-        >
-          <div className="flex items-center gap-2.5">
-            <div className="size-8 rounded-lg bg-green-50 flex items-center justify-center">
-              <Receipt className="size-4 text-green-600" />
+        {isPaid && (
+          <a
+            href="/admission/application/receipt"
+            className="flex items-center justify-between rounded-xl border bg-background p-4 hover:bg-muted/50 transition-colors group"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="size-8 rounded-lg bg-green-50 flex items-center justify-center">
+                <Receipt className="size-4 text-green-600" />
+              </div>
+              <span className="text-sm font-medium">Receipt</span>
             </div>
-            <span className="text-sm font-medium">Receipt</span>
-          </div>
-          <ChevronRight className="size-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
-        </a>
+            <ChevronRight className="size-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+          </a>
+        )}
       </div>
 
       <p className="text-center text-xs text-muted-foreground pt-2">

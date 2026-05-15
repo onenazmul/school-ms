@@ -5,14 +5,14 @@
 import { StudentSidebar } from "./student-sidebar";
 import { StudentTopbar } from "./student-topbar";
 import { StudentMobileNav } from "./student-mobile-nav";
-import type { StudentSession } from "@/lib/auth/student";
+import type { SessionUser } from "@/lib/auth/types";
 
 export function StudentPanelLayout({
   children,
   session,
 }: {
   children: React.ReactNode;
-  session: StudentSession;
+  session: SessionUser;
 }) {
   return (
     <div className="flex h-screen overflow-hidden bg-muted/30">

@@ -24,14 +24,10 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-
 // ── Icons ─────────────────────────────────────────────────────────────────────
 import {
   ArrowLeft, CheckCircle2, Clock, AlertTriangle, Copy, Check,
-  Download, Loader2, CreditCard, RotateCcw, Info, Eye,
+  Download, Loader2, CreditCard, RotateCcw, Info,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -387,80 +383,6 @@ function PaymentStatusCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SampleReceiptButton — opens PS-001 receipt in an iframe dialog
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SampleReceiptButton() {
-  const [open, setOpen]       = useState(false);
-  const [pdfUrl, setPdfUrl]   = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-
-  async function openPreview() {
-    setOpen(true);
-    if (pdfUrl) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/documents/payment-receipt/PS-001");
-      if (!res.ok) throw new Error("Could not generate sample receipt");
-      const blob = await res.blob();
-      setPdfUrl(URL.createObjectURL(blob));
-    } catch (e: any) {
-      setError(e.message ?? "Preview failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleClose() {
-    setOpen(false);
-  }
-
-  return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        onClick={openPreview}
-      >
-        <Eye className="size-3.5" />
-        Sample receipt
-      </Button>
-
-      <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-        <DialogContent className="max-w-3xl w-full p-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-5 pb-3 border-b">
-            <DialogTitle className="text-sm flex items-center gap-2">
-              <Eye className="size-4 text-indigo-600" />
-              Sample Payment Receipt — PS-001
-            </DialogTitle>
-          </DialogHeader>
-          <div className="h-[580px] bg-muted/30">
-            {loading && (
-              <div className="h-full flex flex-col items-center justify-center gap-3">
-                <Loader2 className="size-8 animate-spin text-indigo-600" />
-                <p className="text-sm text-muted-foreground">Generating receipt…</p>
-              </div>
-            )}
-            {error && (
-              <div className="h-full flex flex-col items-center justify-center gap-2">
-                <AlertTriangle className="size-8 text-amber-500" />
-                <p className="text-sm text-muted-foreground">{error}</p>
-              </div>
-            )}
-            {pdfUrl && !loading && (
-              <iframe src={pdfUrl} className="w-full h-full border-0" title="Sample Receipt" />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main PaymentPage (exported)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -585,7 +507,6 @@ export function PaymentPage({ ctx }: { ctx: PaymentPageContext }) {
             <ArrowLeft className="size-4" />
           </a>
           <h1 className="font-semibold text-sm flex-1 truncate">Payment</h1>
-          <SampleReceiptButton />
           <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded-md shrink-0">
             #{ctx.entityLabel}
           </span>

@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useSession, signOut } from "@/lib/auth/admin-client";
+import { useSession, signOut } from "@/lib/auth/client";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -25,6 +25,7 @@ import {
   BarChart3,
   Wallet,
   Download,
+  Activity,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -61,10 +62,12 @@ const NAV: Record<string, NavItem[]> = {
     { label: "Ledger",        href: "/admin/finance/ledger",       icon: Wallet },
     { label: "Receipts",      href: "/admin/finance/receipts",     icon: Receipt },
     { label: "Payments",      href: "/admin/admissions/payments",  icon: DollarSign },
+    { label: "Adm. Settings", href: "/admin/admissions/settings", icon: Settings },
     { kind: "divider", label: "More" },
-    { label: "Documents", href: "/admin/documents", icon: Download },
-    { label: "Reports",   href: "/admin/reports",   icon: BarChart3 },
-    { label: "Settings",  href: "/admin/settings",  icon: Settings },
+    { label: "Documents",     href: "/admin/documents",     icon: Download },
+    { label: "Reports",       href: "/admin/reports",       icon: BarChart3 },
+    { label: "Activity Log",  href: "/admin/activity-log",  icon: Activity },
+    { label: "Settings",      href: "/admin/settings",      icon: Settings },
   ],
   teacher: [
     { label: "Dashboard",   href: "/teacher/dashboard",  icon: LayoutDashboard },
@@ -112,9 +115,14 @@ export function Sidebar() {
     .toUpperCase();
 
   async function handleSignOut() {
-    await signOut();
-    router.push("/login");
-    router.refresh();
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login");
+          router.refresh();
+        },
+      },
+    });
   }
 
   return (

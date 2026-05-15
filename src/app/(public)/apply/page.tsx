@@ -6,10 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { admissionApplySchema, type AdmissionApplyInput } from "@/lib/schemas";
 import { submitAdmission, type AdmissionRecord } from "@/lib/actions/admission";
-import { studentSignInFromAdmission } from "@/lib/auth/student";
+import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
@@ -19,18 +20,53 @@ import {
 import { toast } from "sonner";
 import {
   CheckCircle2, Loader2, Copy, Check, Printer, CreditCard,
-  GraduationCap, Eye, EyeOff, Upload,
+  GraduationCap, Eye, EyeOff, Upload, CalendarDays, XCircle,
 } from "lucide-react";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Countdown hook ────────────────────────────────────────────────────────────
 
-const SCHOOL_NAME     = "Markazul Hifz International Cadet Madrasah";
-const SCHOOL_CONTACT  = "01XXXXXXXXX";
-const APPLICATION_FEE = 100;
+function useCountdown(target: string | null) {
+  const calc = () => {
+    if (!target) return null;
+    const diff = new Date(target).getTime() - Date.now();
+    if (diff <= 0) return null;
+    const total = Math.floor(diff / 1000);
+    return {
+      days:    Math.floor(total / 86400),
+      hours:   Math.floor((total % 86400) / 3600),
+      minutes: Math.floor((total % 3600) / 60),
+      seconds: total % 60,
+    };
+  };
+  const [time, setTime] = useState(calc);
+  useEffect(() => {
+    if (!target) return;
+    const id = setInterval(() => setTime(calc()), 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  return time;
+}
 
-const CLASSES = [
-  "Nursery", "KG", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5",
-];
+// ── Active config type ────────────────────────────────────────────────────────
+
+interface ActiveConfig {
+  id: number;
+  academicYear: string;
+  applicationStartDate: string | null;
+  applicationEndDate: string | null;
+  feeMode: string;
+  globalFee: number | null;
+  classConfigs: { className: string; fee: number | null }[];
+}
+
+function feeForClass(config: ActiveConfig | null, className: string): number {
+  if (!config) return 0;
+  if (config.feeMode === "per_class") {
+    const cc = config.classConfigs.find((c) => c.className === className);
+    return cc?.fee ?? config.globalFee ?? 0;
+  }
+  return config.globalFee ?? 0;
+}
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -159,16 +195,24 @@ function CopyField({ label, value }: { label: string; value: string }) {
 
 // ── SuccessPage ───────────────────────────────────────────────────────────────
 
-function SuccessPage({ admission, onPayNow }: { admission: AdmissionRecord; onPayNow: () => void }) {
-  const name = admission.name_en ?? admission.name ?? "—";
+function SuccessPage({
+  admission, onPayNow, schoolName, schoolContact,
+}: {
+  admission: AdmissionRecord;
+  onPayNow: () => void;
+  schoolName: string;
+  schoolContact: string;
+}) {
+  const name = admission.name_en ?? "—";
+  const isFree = admission.free_admission;
   return (
     <div className="space-y-5 max-w-lg mx-auto">
       <div className="text-center space-y-1 print:mb-6">
         <div className="size-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white mx-auto mb-2">
           <GraduationCap className="size-6" />
         </div>
-        <h2 className="font-bold text-lg">{SCHOOL_NAME}</h2>
-        <p className="text-xs text-muted-foreground">Contact: {SCHOOL_CONTACT}</p>
+        <h2 className="font-bold text-lg">{schoolName}</h2>
+        {schoolContact && <p className="text-xs text-muted-foreground">Contact: {schoolContact}</p>}
       </div>
 
       <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
@@ -204,7 +248,7 @@ function SuccessPage({ admission, onPayNow }: { admission: AdmissionRecord; onPa
           ["Gender",         admission.gender],
           ["Date of Birth",  admission.dob],
           ["Guardian",       admission.guardian_name ?? "—"],
-          ["Guardian Phone", admission.guardian_mobile_no ?? admission.guardian_phone ?? "—"],
+          ["Guardian Phone", admission.guardian_mobile_no ?? "—"],
         ].map(([label, value]) => (
           <div key={label} className="flex justify-between text-sm">
             <span className="text-muted-foreground">{label}</span>
@@ -214,13 +258,20 @@ function SuccessPage({ admission, onPayNow }: { admission: AdmissionRecord; onPa
       </div>
 
       <div className="space-y-3 print:hidden">
-        <Button
-          onClick={onPayNow}
-          className="w-full h-12 text-base bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold"
-        >
-          <CreditCard className="size-5" />
-          Pay Application Fee — ৳{APPLICATION_FEE}
-        </Button>
+        {isFree ? (
+          <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 text-center space-y-1">
+            <p className="text-sm font-semibold text-blue-800">No application fee required</p>
+            <p className="text-xs text-blue-700">Your application is now under review. We will contact you about next steps.</p>
+          </div>
+        ) : (
+          <Button
+            onClick={onPayNow}
+            className="w-full h-12 text-base bg-green-600 hover:bg-green-700 text-white gap-2 font-semibold"
+          >
+            <CreditCard className="size-5" />
+            Pay Application Fee — ৳{admission.application_fee}
+          </Button>
+        )}
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1 gap-2" onClick={() => window.print()}>
             <Printer className="size-4" />Print
@@ -229,7 +280,7 @@ function SuccessPage({ admission, onPayNow }: { admission: AdmissionRecord; onPa
             href="/admission/dashboard"
             className="flex-1 inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
           >
-            Pay Later →
+            {isFree ? "Go to Dashboard →" : "Pay Later →"}
           </a>
         </div>
       </div>
@@ -245,7 +296,26 @@ export default function ApplyPage() {
   const [photoFile, setPhotoFile]   = useState<File | null>(null);
   const [sigFile,   setSigFile]     = useState<File | null>(null);
   const [samePerm,  setSamePerm]    = useState(false);
+  const [config,    setConfig]      = useState<ActiveConfig | null>(null);
+  const [classList, setClassList]   = useState<string[]>([]);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [schoolName,    setSchoolName]    = useState("School");
+  const [schoolContact, setSchoolContact] = useState("");
   const router = useRouter();
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/v1/admission-config/active").then((r) => r.json()).catch(() => ({ config: null })),
+      fetch("/api/v1/classes").then((r) => r.json()).catch(() => ({ classes: [] })),
+      fetch("/api/v1/settings").then((r) => r.json()).catch(() => ({ name: "", phone: "" })),
+    ]).then(([configData, classData, settingsData]) => {
+      setConfig(configData.config ?? null);
+      setClassList((classData.classes ?? []).map((c: { name: string }) => c.name));
+      if (settingsData.name)  setSchoolName(settingsData.name);
+      if (settingsData.phone) setSchoolContact(settingsData.phone);
+      setConfigLoading(false);
+    });
+  }, []);
 
   const form = useForm<AdmissionApplyInput>({
     resolver: zodResolver(admissionApplySchema),
@@ -299,7 +369,6 @@ export default function ApplyPage() {
       }
       if (photoFile) fd.append("student_photo",     photoFile);
       if (sigFile)   fd.append("student_signature", sigFile);
-      fd.set("application_fee", String(APPLICATION_FEE));
 
       const result = await submitAdmission(fd);
       if (!result.success) { toast.error(result.message); return; }
@@ -307,10 +376,15 @@ export default function ApplyPage() {
         toast.error("Application submitted but response was incomplete. Please contact the school.");
         return;
       }
-      await studentSignInFromAdmission(
-        { ...result.admission, name: result.admission.name_en ?? result.admission.name ?? result.admission.username },
-        result.token,
-      );
+
+      // Auto sign-in so the applicant can immediately access /admission/*
+      const { error: signInError } = await authClient.signIn.username({
+        username: result.admission.username,
+        password: values.password,
+      });
+      if (signInError) {
+        toast.warning("Application saved, but auto sign-in failed. Please log in manually.");
+      }
       setAdmission(result.admission);
     } catch (err: any) {
       toast.error(err.message ?? "Submission failed. Please try again.");
@@ -319,10 +393,56 @@ export default function ApplyPage() {
     }
   }
 
+  // Countdown to deadline
+  const countdown = useCountdown(config?.applicationEndDate ?? null);
+
+  // Deadline check — after config loads
+  const isClosed = !configLoading && config?.applicationEndDate != null
+    && new Date() > new Date(config.applicationEndDate);
+
+  // Reactive fee for selected class
+  const selectedClass = form.watch("class_name");
+  const currentFee = feeForClass(config, selectedClass);
+
   if (admission) {
     return (
       <div className="min-h-screen bg-muted/20 py-10 px-4">
-        <SuccessPage admission={admission} onPayNow={() => router.push("/admission/application")} />
+        <SuccessPage
+          admission={admission}
+          onPayNow={() => router.push("/admission/application")}
+          schoolName={schoolName}
+          schoolContact={schoolContact}
+        />
+      </div>
+    );
+  }
+
+  if (isClosed) {
+    return (
+      <div className="min-h-screen bg-muted/20 flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-4 bg-background rounded-2xl border p-8 shadow-sm">
+          <div className="size-14 rounded-full bg-red-100 flex items-center justify-center mx-auto">
+            <XCircle className="size-8 text-red-500" />
+          </div>
+          <h1 className="text-xl font-bold">Applications Closed</h1>
+          <p className="text-sm text-muted-foreground">
+            The application deadline for {schoolName} ({config!.academicYear} cycle) has passed.
+          </p>
+          {config?.applicationEndDate && (
+            <p className="text-xs text-muted-foreground">
+              Deadline was:{" "}
+              {new Date(config.applicationEndDate).toLocaleString("en-BD", {
+                dateStyle: "long", timeStyle: "short",
+              })}
+            </p>
+          )}
+          <a
+            href="/apply/login"
+            className="inline-flex items-center justify-center rounded-md bg-indigo-600 text-white px-5 py-2.5 text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            Already applied? Sign in
+          </a>
+        </div>
       </div>
     );
   }
@@ -336,8 +456,59 @@ export default function ApplyPage() {
           <div className="size-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white mx-auto mb-3">
             <GraduationCap className="size-5" />
           </div>
-          <h1 className="text-xl font-semibold">{SCHOOL_NAME}</h1>
-          <p className="text-muted-foreground text-sm mt-1">Online Admission Form — Academic Year 2026</p>
+          <h1 className="text-xl font-semibold">{schoolName}</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Online Admission Form
+            {config ? ` — Academic Year ${config.academicYear}` : ""}
+          </p>
+
+          {/* Fee badge */}
+          {!configLoading && config && (
+            <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+              {config.feeMode === "same_for_all" && config.globalFee != null && (
+                <Badge variant="outline" className="text-xs">
+                  {config.globalFee === 0 ? "Free admission" : `Application fee: ৳${config.globalFee}`}
+                </Badge>
+              )}
+              {config.feeMode === "per_class" && (
+                <Badge variant="outline" className="text-xs">Fee varies by class</Badge>
+              )}
+            </div>
+          )}
+
+          {/* Countdown */}
+          {!configLoading && config?.applicationEndDate && countdown && (
+            <div className="mt-3">
+              <p className="text-xs text-muted-foreground mb-1.5 flex items-center justify-center gap-1">
+                <CalendarDays className="size-3" /> Application closes in
+              </p>
+              <div className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2">
+                {[
+                  { v: countdown.days,    l: "Days" },
+                  { v: countdown.hours,   l: "Hrs" },
+                  { v: countdown.minutes, l: "Min" },
+                  { v: countdown.seconds, l: "Sec" },
+                ].map(({ v, l }, i) => (
+                  <React.Fragment key={l}>
+                    {i > 0 && <span className="text-indigo-300 text-sm font-bold">:</span>}
+                    <div className="text-center min-w-[36px]">
+                      <p className="text-lg font-bold text-indigo-700 tabular-nums leading-none">
+                        {String(v).padStart(2, "0")}
+                      </p>
+                      <p className="text-[9px] text-indigo-400 uppercase tracking-wider">{l}</p>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Deadline passed label (shouldn't reach here since isClosed redirects, but just in case) */}
+          {!configLoading && config?.applicationEndDate && !countdown && !isClosed && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Deadline:{" "}
+              {new Date(config.applicationEndDate).toLocaleString("en-BD", { dateStyle: "medium", timeStyle: "short" })}
+            </p>
+          )}
         </div>
 
         <div className="bg-background rounded-2xl shadow-sm border p-5 md:p-7">
@@ -459,8 +630,18 @@ export default function ApplyPage() {
                     <FormLabel>Applying for Class <span className="text-destructive">*</span></FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
-                      <SelectContent>{CLASSES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                      <SelectContent>
+                        {(classList.length > 0 ? classList : ["Nursery","KG","Class 1","Class 2","Class 3","Class 4","Class 5"])
+                          .map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
                     </Select>
+                    {/* Per-class fee hint */}
+                    {config?.feeMode === "per_class" && field.value && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Application fee for {field.value}:{" "}
+                        <strong>{currentFee === 0 ? "Free" : `৳${currentFee}`}</strong>
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )} />

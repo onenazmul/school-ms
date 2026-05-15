@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSession } from "@/lib/auth/admin-client";
+import { useSession } from "@/lib/auth/client";
 
 function useBreadcrumb() {
   const pathname = usePathname();

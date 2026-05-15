@@ -10,7 +10,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { StudentSession } from "@/lib/auth/student";
+import type { SessionUser } from "@/lib/auth/types";
+import { signOut } from "@/lib/auth/client";
 
 function useBreadcrumb() {
   const pathname = usePathname();
@@ -22,16 +23,14 @@ function useBreadcrumb() {
   }));
 }
 
-export function StudentTopbar({ session }: { session: StudentSession }) {
+export function StudentTopbar({ session }: { session: SessionUser }) {
   const router = useRouter();
   const crumbs = useBreadcrumb();
 
-  const initials = session.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  const initials = session.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
 
   async function handleSignOut() {
-    await fetch("/api/auth/student-signout", { method: "POST" });
-    router.push("/student-login");
-    router.refresh();
+    await signOut({ fetchOptions: { onSuccess: () => { router.push("/student-login"); router.refresh(); } } });
   }
 
   return (
@@ -72,7 +71,7 @@ export function StudentTopbar({ session }: { session: StudentSession }) {
               <div className="hidden md:block text-left">
                 <p className="text-xs font-medium leading-none">{session.name}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                  {session.admissionNo || session.username}
+                  {session.username}
                 </p>
               </div>
             </button>

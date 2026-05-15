@@ -1,6 +1,6 @@
 // app/(admin)/layout.tsx
 import { redirect } from "next/navigation";
-import { getAdminSession } from "@/lib/auth/admin";
+import { getSession } from "@/lib/auth/helpers";
 import { PanelLayout } from "@/components/layout/panel-layout";
 
 export default async function AdminLayout({
@@ -8,9 +8,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  if (process.env.DEV_OPEN_STAFF !== "true") {
-    const session = await getAdminSession();
-    if (!session) redirect("/login");
-  }
+  const session = await getSession();
+  if (!session || (session.user as any).role !== "admin") redirect("/login");
   return <PanelLayout>{children}</PanelLayout>;
 }

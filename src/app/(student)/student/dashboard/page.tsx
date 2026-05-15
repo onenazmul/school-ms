@@ -1,7 +1,7 @@
 "use client";
 // app/(student)/student/dashboard/page.tsx
 
-import { useStudentSession } from "@/lib/auth/student-client";
+import { useSession } from "@/lib/auth/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ const MOCK_STUDENT = {
 };
 
 export default function StudentDashboard() {
-  const { session } = useStudentSession();
+  const { data: __sd } = useSession(); const session = __sd?.user as any;
   const student = MOCK_STUDENT;
 
   return (

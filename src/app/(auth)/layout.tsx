@@ -2,11 +2,11 @@
 // Staff-only auth layout — admins and teachers only.
 // Students have their own login at /student-login.
 import { redirect } from "next/navigation";
-import { getAdminSession } from "@/lib/auth/admin";
+import { getSession } from "@/lib/auth/helpers";
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
-  const session = await getAdminSession();
-  if (session?.role === "admin") {
+  const session = await getSession();
+  if ((session?.user as any)?.role === "admin") {
     redirect("/admin/dashboard");
   }
 

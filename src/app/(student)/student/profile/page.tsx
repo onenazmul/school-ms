@@ -2,7 +2,7 @@
 // app/(student)/student/profile/page.tsx
 
 import { useState } from "react";
-import { useStudentSession } from "@/lib/auth/student-client";
+import { useSession } from "@/lib/auth/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,7 @@ const MOCK_PROFILE = {
 };
 
 export default function StudentProfilePage() {
-  const { session } = useStudentSession();
+  const { data: __sd } = useSession(); const session = __sd?.user as any;
   const [changingPw, setChangingPw] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
 

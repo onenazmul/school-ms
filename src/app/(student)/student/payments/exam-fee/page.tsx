@@ -4,13 +4,13 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { useStudentSession } from "@/lib/auth/student-client";
+import { useSession } from "@/lib/auth/client";
 import { PaymentPage } from "@/components/payment/PaymentPage";
 import { getExamFeesByStudentId, getSubmissionsByExamFeeId } from "@/lib/mock-data/payments";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function ExamFeePaymentContent() {
-  const { session, loading } = useStudentSession();
+  const { data: __sd, isPending: loading } = useSession(); const session = __sd?.user as any;
   const searchParams = useSearchParams();
   const examId = searchParams.get("examId") ?? "";
 

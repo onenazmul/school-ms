@@ -7,7 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { StudentSession } from "@/lib/auth/student";
+import type { SessionUser } from "@/lib/auth/types";
+import { signOut } from "@/lib/auth/client";
 import {
   LayoutDashboard, DollarSign, Receipt, UserCircle,
   ChevronLeft, Menu, LogOut, BookOpen,
@@ -21,7 +22,7 @@ const NAV_ITEMS = [
   { label: "Profile",    href: "/student/profile",   icon: UserCircle      },
 ];
 
-export function StudentSidebar({ session }: { session: StudentSession }) {
+export function StudentSidebar({ session }: { session: SessionUser }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -30,9 +31,14 @@ export function StudentSidebar({ session }: { session: StudentSession }) {
     .split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
 
   async function handleSignOut() {
-    await fetch("/api/auth/student-signout", { method: "POST" });
-    router.push("/student-login");
-    router.refresh();
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/student-login");
+          router.refresh();
+        },
+      },
+    });
   }
 
   return (
@@ -97,7 +103,7 @@ export function StudentSidebar({ session }: { session: StudentSession }) {
             <div className="flex-1 min-w-0">
               <p className="text-xs font-medium truncate">{session.name}</p>
               <p className="text-[10px] text-muted-foreground truncate font-mono">
-                {session.admissionNo || session.username}
+                {session.username}
               </p>
             </div>
           )}

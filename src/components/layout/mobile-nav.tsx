@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession } from "@/lib/auth/admin-client";
+import { useSession } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, GraduationCap, DollarSign, Receipt, Users,

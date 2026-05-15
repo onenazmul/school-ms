@@ -2,7 +2,7 @@
 // app/(student)/student/payments/page.tsx
 // Student exam fee list — shows all exam fees with status and pay/receipt buttons.
 
-import { useStudentSession } from "@/lib/auth/student-client";
+import { useSession } from "@/lib/auth/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -122,7 +122,7 @@ function ExamFeeCard({ fee, studentId }: { fee: ExamFee; studentId: string }) {
 }
 
 export default function StudentPaymentsPage() {
-  const { session, loading } = useStudentSession();
+  const { data: __sd, isPending: loading } = useSession(); const session = __sd?.user as any;
 
   if (loading) {
     return (

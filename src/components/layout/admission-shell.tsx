@@ -7,7 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import type { StudentSession } from "@/lib/auth/student";
+import type { SessionUser } from "@/lib/auth/types";
+import { signOut } from "@/lib/auth/client";
 import {
   GraduationCap, LayoutDashboard, FileText, Receipt, LogOut,
 } from "lucide-react";
@@ -47,7 +48,7 @@ export function AdmissionShell({
   session,
   children,
 }: {
-  session: StudentSession;
+  session: SessionUser;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -57,9 +58,14 @@ export function AdmissionShell({
     .split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 
   async function handleSignOut() {
-    await fetch("/api/auth/student-signout", { method: "POST" });
-    router.push("/apply/login");
-    router.refresh();
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/apply/login");
+          router.refresh();
+        },
+      },
+    });
   }
 
   return (

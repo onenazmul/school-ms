@@ -1,13 +1,11 @@
 "use client";
 // lib/queries/index.ts
-// Staff queries use Better Auth useSession (admin/teacher).
-// Student portal queries use useStudentSession (separate JWT cookie).
+// Phase 2 will replace these with SWR hooks pointing to /api/v1/* routes.
+// For now, tokens return undefined — queries fail gracefully against the old API.
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { EP } from "@/lib/api/endpoints";
-import { useSession } from "@/lib/auth/admin-client";
-import { useStudentSession } from "@/lib/auth/student-client";
 
 export const QK = {
   students:     ["students"]       as const,
@@ -28,17 +26,9 @@ export const QK = {
   myReceipts:   ["my-receipts"]    as const,
 };
 
-/** Token for admin/teacher — from Better Auth JWT */
-function useStaffToken() {
-  const { data: session } = useSession();
-  return (session?.user as any)?.laravelToken as string | undefined;
-}
-
-/** Token for signed-in student — from student_session cookie */
-function useStudentToken() {
-  const { session } = useStudentSession();
-  return session?.laravelToken as string | undefined;
-}
+// Tokens removed — Phase 2 replaces API calls with own /api/v1/* routes
+function useStaffToken(): string | undefined { return undefined; }
+function useStudentToken(): string | undefined { return undefined; }
 
 // ── Admin: Students ──────────────────────────────────────────────────────────
 

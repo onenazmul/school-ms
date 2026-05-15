@@ -1,217 +1,280 @@
 "use client";
 // app/(admin)/admin/students/[id]/edit/page.tsx
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
-} from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, RefreshCw, Save } from "lucide-react";
 
-const schema = z.object({
-  firstName: z.string().min(2),
-  lastName: z.string().min(2),
-  email: z.string().email(),
-  phone: z.string().min(10),
-  class_: z.string().min(1),
-  section: z.string().min(1),
-  roll: z.string().optional(),
-  address: z.string().min(5),
-  city: z.string().min(2),
-  guardianName: z.string().min(2),
-  guardianPhone: z.string().min(10),
-  status: z.enum(["active", "inactive"]),
-});
-type EditInput = z.infer<typeof schema>;
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-// Simulate fetching student by id
-const MOCK_STUDENTS: Record<string, EditInput & { admissionNo: string }> = {
-  S001: {
-    firstName: "Rahim", lastName: "Uddin", email: "rahim@student.edu",
-    phone: "01712345678", class_: "9", section: "A", roll: "01",
-    address: "House 12, Road 5, Sirajganj", city: "Sirajganj",
-    guardianName: "Kamal Uddin", guardianPhone: "01812345678",
-    status: "active", admissionNo: "BFS-2024-0127",
-  },
+type StudentProfile = {
+  id: string;
+  class_name: string;
+  section: string | null;
+  roll_number: string | null;
+  academic_year: string;
+  session_name: string | null;
+  status: string;
+  name_en: string;
 };
+
+type SchoolClass = { id: number; name: string };
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const STUDENT_STATUSES = ["Active", "Inactive", "Graduated", "Transferred"] as const;
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function EditStudentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const qc = useQueryClient();
 
-  const student = MOCK_STUDENTS[id] ?? MOCK_STUDENTS.S001;
-
-  const form = useForm<EditInput>({
-    resolver: zodResolver(schema),
-    defaultValues: student,
+  const { data, isLoading, isError, refetch } = useQuery<{ student: StudentProfile }>({
+    queryKey: ["admin-student", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/admin/students/${id}`);
+      if (!res.ok) throw new Error("Failed to load student");
+      return res.json();
+    },
+    staleTime: 30_000,
   });
 
-  async function onSubmit(values: EditInput) {
-    setLoading(true);
-    await new Promise(r => setTimeout(r, 900));
-    setLoading(false);
-    toast.success("Student record updated");
-    router.push(`/admin/students/${id}`);
+  const { data: classesData } = useQuery<{ classes: SchoolClass[] }>({
+    queryKey: ["admin-classes"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/admin/classes");
+      if (!res.ok) throw new Error("Failed to load classes");
+      return res.json();
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const student = data?.student;
+  const classes = classesData?.classes ?? [];
+
+  // ── Form state ────────────────────────────────────────────────────────────
+  const [className, setClassName]       = useState("");
+  const [section, setSection]           = useState("");
+  const [rollNumber, setRollNumber]     = useState("");
+  const [academicYear, setAcademicYear] = useState("");
+  const [sessionName, setSessionName]   = useState("");
+  const [status, setStatus]             = useState<string>("");
+  const [saving, setSaving]             = useState(false);
+
+  useEffect(() => {
+    if (student) {
+      setClassName(student.class_name);
+      setSection(student.section ?? "");
+      setRollNumber(student.roll_number ?? "");
+      setAcademicYear(student.academic_year);
+      setSessionName(student.session_name ?? "");
+      setStatus(student.status);
+    }
+  }, [student]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!className.trim() || !academicYear.trim() || !status) {
+      toast.error("Class, Academic Year and Status are required");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/v1/admin/students/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          class_name:    className.trim(),
+          section:       section.trim() || null,
+          roll_number:   rollNumber.trim() || null,
+          academic_year: academicYear.trim(),
+          session_name:  sessionName.trim() || null,
+          status,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).message ?? "Failed to save");
+      }
+
+      toast.success("Student updated");
+      qc.invalidateQueries({ queryKey: ["admin-student", id] });
+      router.push(`/admin/students/${id}`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save changes");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 max-w-xl">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-8 w-48" />
+        <div className="space-y-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !student) {
+    return (
+      <div className="space-y-4">
+        <Link href={`/admin/students/${id}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-4" /> Back to Profile
+        </Link>
+        <div className="border rounded-xl p-10 text-center space-y-3">
+          <p className="text-sm text-muted-foreground">Failed to load student.</p>
+          <Button size="sm" variant="outline" onClick={() => refetch()} className="gap-1.5">
+            <RefreshCw className="size-3.5" /> Retry
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6 max-w-xl">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <Link
           href={`/admin/students/${id}`}
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="size-4" />Back to Profile
+          <ArrowLeft className="size-4" />
         </Link>
-        <Separator orientation="vertical" className="h-4" />
-        <div className="flex items-center gap-2">
-          <h1 className="text-xl font-semibold">Edit Student</h1>
-          <Badge variant="outline" className="font-mono text-xs">{student.admissionNo}</Badge>
+        <div>
+          <h1 className="text-lg font-semibold">Edit Student</h1>
+          <p className="text-sm text-muted-foreground">{student.name_en}</p>
         </div>
       </div>
 
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-          {/* Personal */}
-          <Card>
-            <CardContent className="pt-5">
-              <h2 className="text-sm font-semibold mb-4">Personal Information</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="firstName" render={({ field }) => (
-                  <FormItem><FormLabel>First Name</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="lastName" render={({ field }) => (
-                  <FormItem><FormLabel>Last Name</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="email" render={({ field }) => (
-                  <FormItem className="col-span-2"><FormLabel>Email</FormLabel>
-                    <FormControl><Input type="email" {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="phone" render={({ field }) => (
-                  <FormItem><FormLabel>Phone</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="status" render={({ field }) => (
-                  <FormItem><FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select><FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </CardContent>
-          </Card>
+      <form onSubmit={handleSubmit}>
+        <Card>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-sm">Academic Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Class */}
+            <div className="space-y-1.5">
+              <Label htmlFor="class_name">
+                Class <span className="text-destructive">*</span>
+              </Label>
+              {classes.length > 0 ? (
+                <Select value={className} onValueChange={setClassName}>
+                  <SelectTrigger id="class_name">
+                    <SelectValue placeholder="Select class" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="class_name"
+                  value={className}
+                  onChange={(e) => setClassName(e.target.value)}
+                  placeholder="e.g. Class Six"
+                />
+              )}
+            </div>
 
-          {/* Academic */}
-          <Card>
-            <CardContent className="pt-5">
-              <h2 className="text-sm font-semibold mb-4">Academic Information</h2>
-              <div className="grid grid-cols-3 gap-4">
-                <FormField control={form.control} name="class_" render={({ field }) => (
-                  <FormItem><FormLabel>Class</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        {["1","2","3","4","5","6","7","8","9","10"].map(c => (
-                          <SelectItem key={c} value={c}>Class {c}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="section" render={({ field }) => (
-                  <FormItem><FormLabel>Section</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                      <SelectContent>
-                        {["A","B","C","D"].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                      </SelectContent>
-                    </Select><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="roll" render={({ field }) => (
-                  <FormItem><FormLabel>Roll No.</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
-                  </FormItem>
-                )} />
-              </div>
-            </CardContent>
-          </Card>
+            {/* Section */}
+            <div className="space-y-1.5">
+              <Label htmlFor="section">Section</Label>
+              <Input
+                id="section"
+                value={section}
+                onChange={(e) => setSection(e.target.value)}
+                placeholder="e.g. A"
+              />
+            </div>
 
-          {/* Contact */}
-          <Card>
-            <CardContent className="pt-5">
-              <h2 className="text-sm font-semibold mb-4">Contact & Address</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="address" render={({ field }) => (
-                  <FormItem className="col-span-2"><FormLabel>Address</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="city" render={({ field }) => (
-                  <FormItem><FormLabel>City</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </CardContent>
-          </Card>
+            {/* Roll Number */}
+            <div className="space-y-1.5">
+              <Label htmlFor="roll_number">Roll Number</Label>
+              <Input
+                id="roll_number"
+                value={rollNumber}
+                onChange={(e) => setRollNumber(e.target.value)}
+                placeholder="e.g. 42"
+              />
+            </div>
 
-          {/* Guardian */}
-          <Card>
-            <CardContent className="pt-5">
-              <h2 className="text-sm font-semibold mb-4">Guardian Information</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="guardianName" render={({ field }) => (
-                  <FormItem><FormLabel>Guardian Name</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-                <FormField control={form.control} name="guardianPhone" render={({ field }) => (
-                  <FormItem><FormLabel>Guardian Phone</FormLabel>
-                    <FormControl><Input {...field} /></FormControl><FormMessage />
-                  </FormItem>
-                )} />
-              </div>
-            </CardContent>
-          </Card>
+            {/* Academic Year */}
+            <div className="space-y-1.5">
+              <Label htmlFor="academic_year">
+                Academic Year <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="academic_year"
+                value={academicYear}
+                onChange={(e) => setAcademicYear(e.target.value)}
+                placeholder="e.g. 2026"
+              />
+            </div>
 
-          <div className="flex gap-3 pb-10">
-            <Button type="button" variant="outline" className="flex-1"
-              onClick={() => router.push(`/admin/students/${id}`)}>
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1" disabled={loading}>
-              {loading && <Loader2 className="size-4 mr-2 animate-spin" />}
-              Save Changes
-            </Button>
-          </div>
-        </form>
-      </Form>
+            {/* Session Name */}
+            <div className="space-y-1.5">
+              <Label htmlFor="session_name">Session</Label>
+              <Input
+                id="session_name"
+                value={sessionName}
+                onChange={(e) => setSessionName(e.target.value)}
+                placeholder="e.g. January–December 2026"
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1.5">
+              <Label htmlFor="status">
+                Status <span className="text-destructive">*</span>
+              </Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger id="status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {STUDENT_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end gap-2 mt-4">
+          <Button type="button" variant="outline" asChild>
+            <Link href={`/admin/students/${id}`}>Cancel</Link>
+          </Button>
+          <Button type="submit" disabled={saving} className="gap-1.5">
+            <Save className="size-3.5" />
+            {saving ? "Saving…" : "Save Changes"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }

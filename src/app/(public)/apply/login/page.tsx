@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { studentSignIn } from "@/lib/auth/student";
+import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,20 +35,14 @@ function ApplyLoginForm() {
 
   async function onSubmit(values: FormInput) {
     setLoading(true);
-    try {
-      const result = await studentSignIn(values.username, values.password);
-
-      if (!result.success) {
-        toast.error(result.message);
-        return;
-      }
-
-      toast.success(`Welcome back, ${result.user.name}!`);
-      router.push(callbackUrl);
-      router.refresh();
-    } catch (err: any) {
-      toast.error(err.message ?? "Sign in failed. Please try again.");
-    } finally {
+    const { error } = await authClient.signIn.username({
+      username: values.username,
+      password: values.password,
+      callbackURL: callbackUrl,
+      fetchOptions: { onError: () => setLoading(false) },
+    });
+    if (error) {
+      toast.error(error.message ?? "Sign in failed. Please try again.");
       setLoading(false);
     }
   }

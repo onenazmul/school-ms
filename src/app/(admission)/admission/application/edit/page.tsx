@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useStudentSession } from "@/lib/auth/student-client";
-import { api, ApiError } from "@/lib/api/client";
-import { EP } from "@/lib/api/endpoints";
+import { useSession, authClient } from "@/lib/auth/client";
 import { admissionEditSchema, type AdmissionEditInput } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +52,7 @@ function SecTitle({ title }: { title: string }) {
 
 export default function EditApplicationPage() {
   const router = useRouter();
-  const { session, loading: sessionLoading } = useStudentSession();
+  const { data: __sd, isPending: sessionLoading } = useSession(); const session = __sd?.user as any;
   const [fetching, setFetching] = useState(true);
   const [saving, setSaving] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -90,8 +88,11 @@ export default function EditApplicationPage() {
 
   useEffect(() => {
     if (!session?.id || sessionLoading) return;
-    api
-      .get<{ admission: RawAdmission }>(EP.ADMISSION(session.id), session.laravelToken)
+    fetch("/api/v1/admissions/me")
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json()).message ?? "Could not load application");
+        return r.json() as Promise<{ admission: RawAdmission }>;
+      })
       .then(({ admission }) => {
         if (isPaid(admission)) { setLocked(true); return; }
         form.reset({
@@ -178,19 +179,27 @@ export default function EditApplicationPage() {
     if (!session) return;
     setSaving(true);
     try {
-      await api.postParams(
-        EP.ADMISSION(session.id),
-        { _method: "PUT", ...values },
-        session.laravelToken,
-      );
+      const r = await fetch("/api/v1/admissions/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.message ?? "Could not save changes.");
+      }
+
+      // Refresh Better Auth session cookie so the topbar reflects the new name immediately.
+      // Direct DB updates don't invalidate the 5-min cookie cache; updateUser does.
+      if (session?.name !== values.name_en) {
+        await authClient.updateUser({ name: values.name_en });
+      }
+
       toast.success("Application updated successfully.");
       router.push("/admission/application");
+      router.refresh();
     } catch (err: unknown) {
-      if (err instanceof ApiError && err.errors) {
-        Object.entries(err.errors).forEach(([f, msgs]) =>
-          toast.error(`${f}: ${(msgs as string[]).join(", ")}`)
-        );
-      } else {
+      {
         toast.error((err as Error).message ?? "Could not save changes.");
       }
     } finally {

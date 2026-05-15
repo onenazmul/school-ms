@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { adminSignIn } from "@/lib/auth/admin";
+import { signIn } from "@/lib/auth/client";
 import { loginSchema, type LoginInput } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,14 +30,14 @@ function LoginForm() {
 
   async function onSubmit(values: LoginInput) {
     setLoading(true);
-    try {
-      const result = await adminSignIn(values.email, values.password);
-      if (!result.success) throw new Error(result.message);
-      router.push(callbackUrl || "/admin/dashboard");
-      router.refresh();
-    } catch (err: any) {
-      toast.error(err.message ?? "Login failed");
-    } finally {
+    const { error } = await signIn.email({
+      email: values.email,
+      password: values.password,
+      callbackURL: callbackUrl || "/admin/dashboard",
+      fetchOptions: { onError: () => setLoading(false) },
+    });
+    if (error) {
+      toast.error(error.message ?? "Login failed");
       setLoading(false);
     }
   }
