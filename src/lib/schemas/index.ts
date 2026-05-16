@@ -106,6 +106,7 @@ export const admissionApplySchema = z.object({
 
   // Academic
   class_name:             z.string().min(1, "Please select a class"),
+  section:                z.string(),
   session_name:           z.string(),
   division:               z.string(),
   previous_institute_name: z.string(),

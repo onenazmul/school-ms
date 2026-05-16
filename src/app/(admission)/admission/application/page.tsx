@@ -61,6 +61,7 @@ type Admission = {
   guardian_occupation: string | null;
 
   class_name: string;
+  section: string | null;
   session_name: string | null;
   division: string | null;
   previous_institute_name: string | null;
@@ -412,6 +413,7 @@ export default function ApplicationPage() {
       <div className="rounded-xl border bg-background p-4">
         <SectionHeader icon={BookOpen} title="Academic Details" />
         <InfoRow label="Applied Class"         value={admission.class_name} />
+        <InfoRow label="Section"               value={admission.section} />
         <InfoRow label="Session"               value={admission.session_name} />
         <InfoRow label="Division"              value={admission.division} />
         <InfoRow label="Previous Institute"    value={admission.previous_institute_name} />

@@ -79,6 +79,7 @@ type Admission = {
   guardian_nid_no: string | null;
   guardian_dob: string | null;
   class_name: string;
+  section: string | null;
   session_name: string | null;
   division: string | null;
   previous_institute_name: string | null;
@@ -490,6 +491,7 @@ export default function AdmissionDetailPage({ params }: { params: Promise<{ id: 
         <InfoRow label="Name (BN)"           value={admission.name_bn} />
         <InfoRow label="Name (AR)"           value={admission.name_ar} />
         <InfoRow label="Class Applied"       value={admission.class_name} />
+        <InfoRow label="Section"             value={admission.section} />
         <InfoRow label="Session"             value={admission.session_name} />
         <InfoRow label="Division"            value={admission.division} />
         <InfoRow label="Gender"              value={admission.gender} />

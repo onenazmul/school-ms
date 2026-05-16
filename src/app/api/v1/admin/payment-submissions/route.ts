@@ -41,6 +41,7 @@ export async function GET() {
     screenshot_url: s.screenshotUrl,
     status: s.status,
     admin_note: s.adminNote,
+    receipt_number: s.receiptNumber ?? null,
     verified_by: s.verifiedBy,
     verified_at: s.verifiedAt?.toISOString() ?? null,
     submitted_at: s.submittedAt.toISOString(),

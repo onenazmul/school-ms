@@ -155,6 +155,7 @@ model Admission {
   guardianDob              DateTime?
 
   className             String
+  section               String?
   sessionName           String?
   division              String?
   previousInstituteName String?
@@ -337,21 +338,62 @@ model PaymentSubmissionItem {
   @@unique([submissionId, billId])
 }
 
+model Exam {
+  id           String    @id
+  name         String
+  academicYear String
+  // null = all classes, otherwise specific class name
+  className    String?
+  startDate    DateTime?
+  endDate      DateTime?
+  // draft | published
+  status       String    @default("draft")
+  // JSON: string[]
+  instructions Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  schedule ExamSubjectSchedule[]
+  results  ExamResult[]
+}
+
+model ExamSubjectSchedule {
+  id        String   @id
+  examId    String
+  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subject   String
+  examDate  DateTime
+  startTime String
+  endTime   String
+  room      String?
+  sortOrder Int      @default(0)
+
+  @@unique([examId, subject])
+}
+
 model ExamResult {
   id        String  @id
   studentId String
   student   Student @relation(fields: [studentId], references: [id])
 
+  examId       String?
+  exam         Exam?   @relation(fields: [examId], references: [id])
   examName     String
   academicYear String
-  // [{ subject, fullMarks, obtainedMarks, grade }]
+  // [{ subject, fullMarks, obtainedMarks, grade, remarks? }]
   subjects Json
 
-  totalMarks  Decimal? @db.Decimal(10, 2)
-  gpa         Decimal? @db.Decimal(4, 2)
-  grade       String?
-  position    Int?
-  publishedAt DateTime?
+  totalMarks        Decimal? @db.Decimal(10, 2)
+  gpa               Decimal? @db.Decimal(4, 2)
+  grade             String?
+  position          Int?
+  totalStudents     Int?
+  attendancePresent Int?
+  attendanceTotal   Int?
+  pass              Boolean?
+  teacherRemarks    String?  @db.Text
+  publishedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

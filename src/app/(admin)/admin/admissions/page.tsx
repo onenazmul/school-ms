@@ -103,6 +103,7 @@ type Admission = {
   guardian_nid_no: string | null;
   guardian_dob: string | null;
   class_name: string;
+  section: string | null;
   session_name: string | null;
   division: string | null;
   previous_institute_name: string | null;
@@ -629,6 +630,7 @@ function AdmissionSheet({
           <InfoRow label="Name (BN)" value={admission.name_bn} />
           <InfoRow label="Name (AR)" value={admission.name_ar} />
           <InfoRow label="Class Applied" value={admission.class_name} />
+          <InfoRow label="Section" value={admission.section} />
           <InfoRow label="Session" value={admission.session_name} />
           <InfoRow label="Division" value={admission.division} />
           <InfoRow label="Gender" value={admission.gender} />
@@ -1371,7 +1373,7 @@ function AdmissionsContent() {
                       {visibleCols.has("class") && (
                         <td className="py-3 px-4">
                           <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
-                            {a.class_name}
+                            {a.class_name}{a.section ? ` · ${a.section}` : ""}
                           </span>
                         </td>
                       )}
@@ -1522,7 +1524,9 @@ function AdmissionsContent() {
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium">{a.class_name}</p>
+                      <p className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-medium">
+                        {a.class_name}{a.section ? ` · ${a.section}` : ""}
+                      </p>
                     </div>
                   </div>
 

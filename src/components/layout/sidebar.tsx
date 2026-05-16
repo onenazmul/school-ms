@@ -65,6 +65,7 @@ const NAV: Record<string, NavItem[]> = {
     { label: "Payments",      href: "/admin/admissions/payments",  icon: DollarSign },
     { label: "Adm. Settings", href: "/admin/admissions/settings", icon: Settings },
     { kind: "divider", label: "More" },
+    { label: "Exams",         href: "/admin/exams",         icon: FileText },
     { label: "Documents",     href: "/admin/documents",     icon: Download },
     { label: "Reports",       href: "/admin/reports",       icon: BarChart3 },
     { label: "Activity Log",  href: "/admin/activity-log",  icon: Activity },

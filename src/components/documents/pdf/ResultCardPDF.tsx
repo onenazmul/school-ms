@@ -2,10 +2,42 @@
 import {
   Document, Page, View, Text, StyleSheet,
 } from "@react-pdf/renderer";
-import type { DocumentStudent, StudentResult } from "@/lib/mock-data/documents";
-import { SCHOOL_INFO } from "@/lib/mock-data/documents";
 
-const BRAND = SCHOOL_INFO.color;
+export type ResultCardStudent = {
+  id: string;
+  username: string;
+  name: string;
+  class_name: string;
+  section: string | null;
+  roll_number: string | null;
+  gender: string | null;
+  dob: string | null;
+  guardian_name: string | null;
+};
+
+export type ResultCardResult = {
+  exam_term: string;
+  academic_year: string;
+  subjects: { subject: string; max_marks: number; obtained_marks: number; grade: string; remarks: string }[];
+  total_obtained: number;
+  total_max: number;
+  percentage: number;
+  overall_grade: string;
+  position: number;
+  total_students: number;
+  attendance_present: number;
+  attendance_total: number;
+  pass: boolean;
+  teacher_remarks: string;
+};
+
+export type ResultCardSchoolInfo = {
+  name: string;
+  address: string;
+  phone: string;
+};
+
+const BRAND = "#4F46E5";
 
 const styles = StyleSheet.create({
   page: {
@@ -247,9 +279,9 @@ const styles = StyleSheet.create({
   },
 });
 
-type Props = { student: DocumentStudent; result: StudentResult };
+type Props = { student: ResultCardStudent; result: ResultCardResult; schoolInfo: ResultCardSchoolInfo };
 
-export function ResultCardPDF({ student, result }: Props) {
+export function ResultCardPDF({ student, result, schoolInfo }: Props) {
   const attendancePct = result.attendance_total > 0
     ? Math.round((result.attendance_present / result.attendance_total) * 100)
     : 0;
@@ -260,8 +292,8 @@ export function ResultCardPDF({ student, result }: Props) {
         {/* School header */}
         <View style={styles.schoolHeader}>
           <View>
-            <Text style={styles.schoolName}>{SCHOOL_INFO.name}</Text>
-            <Text style={styles.schoolSub}>{SCHOOL_INFO.address} · {SCHOOL_INFO.phone}</Text>
+            <Text style={styles.schoolName}>{schoolInfo.name}</Text>
+            <Text style={styles.schoolSub}>{schoolInfo.address} · {schoolInfo.phone}</Text>
           </View>
           <View>
             <Text style={styles.reportTitle}>RESULT CARD</Text>
@@ -274,11 +306,11 @@ export function ResultCardPDF({ student, result }: Props) {
           <View style={styles.infoLeft}>
             {[
               ["Student Name", student.name],
-              ["Class / Section", `${student.class_name} — Section ${student.section}`],
-              ["Roll Number", student.roll_number],
+              ["Class / Section", `${student.class_name}${student.section ? ` — Section ${student.section}` : ""}`],
+              ["Roll Number", student.roll_number ?? "—"],
               ["Student ID", student.username],
-              ["Date of Birth", student.dob],
-              ["Gender", student.gender],
+              ["Date of Birth", student.dob ?? "—"],
+              ["Gender", student.gender ?? "—"],
               ["Guardian", student.guardian_name ?? "—"],
             ].map(([label, value]) => (
               <View key={label} style={styles.infoRow}>
@@ -371,8 +403,8 @@ export function ResultCardPDF({ student, result }: Props) {
           <Text style={styles.footerText}>
             Generated: {new Date().toLocaleDateString("en-BD", { day: "2-digit", month: "short", year: "numeric" })}
           </Text>
-          <Text style={styles.footerText}>{SCHOOL_INFO.name} — Official Result Card</Text>
-          <Text style={styles.footerText}>{SCHOOL_INFO.phone}</Text>
+          <Text style={styles.footerText}>{schoolInfo.name} — Official Result Card</Text>
+          <Text style={styles.footerText}>{schoolInfo.phone}</Text>
         </View>
       </Page>
     </Document>

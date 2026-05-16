@@ -18,6 +18,7 @@ type Receipt = {
   receipt_number: string;
   student_name: string;
   class: string;
+  section: string | null;
   amount: number;
   date: string;
   method: string;
@@ -107,7 +108,9 @@ export default function ReceiptHistoryPage() {
                     <td className="py-3 px-4 font-mono text-xs font-medium">{r.receipt_number}</td>
                     <td className="py-3 px-4">
                       <p className="font-medium">{r.student_name}</p>
-                      <p className="text-xs text-muted-foreground">Class {r.class}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Class {r.class}{r.section ? ` · ${r.section}` : ""}
+                      </p>
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex flex-wrap gap-1">

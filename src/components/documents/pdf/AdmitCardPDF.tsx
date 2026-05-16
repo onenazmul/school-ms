@@ -2,10 +2,31 @@
 import {
   Document, Page, View, Text, StyleSheet,
 } from "@react-pdf/renderer";
-import type { DocumentStudent, StudentExamCard } from "@/lib/mock-data/documents";
-import { SCHOOL_INFO } from "@/lib/mock-data/documents";
 
-const BRAND = SCHOOL_INFO.color;
+export type AdmitCardStudent = {
+  id: string;
+  username: string;
+  name: string;
+  class_name: string;
+  section: string | null;
+  roll_number: string | null;
+  gender: string | null;
+  dob: string | null;
+};
+
+export type AdmitCardExam = {
+  exam_name: string;
+  academic_year: string;
+  schedule: { subject: string; date: string; day: string; time: string; room: string }[];
+  instructions: string[];
+};
+
+export type AdmitCardSchoolInfo = {
+  name: string;
+  address: string;
+};
+
+const BRAND = "#4F46E5";
 
 const styles = StyleSheet.create({
   page: {
@@ -239,9 +260,9 @@ const styles = StyleSheet.create({
   },
 });
 
-type Props = { student: DocumentStudent; examCard: StudentExamCard };
+type Props = { student: AdmitCardStudent; examCard: AdmitCardExam; schoolInfo: AdmitCardSchoolInfo };
 
-export function AdmitCardPDF({ student, examCard }: Props) {
+export function AdmitCardPDF({ student, examCard, schoolInfo }: Props) {
   return (
     <Document>
       <Page size="A5" style={styles.page}>
@@ -254,8 +275,8 @@ export function AdmitCardPDF({ student, examCard }: Props) {
           {/* School + exam info */}
           <View style={styles.schoolRow}>
             <View>
-              <Text style={styles.schoolName}>{SCHOOL_INFO.name}</Text>
-              <Text style={styles.schoolSub}>{SCHOOL_INFO.address}</Text>
+              <Text style={styles.schoolName}>{schoolInfo.name}</Text>
+              <Text style={styles.schoolSub}>{schoolInfo.address}</Text>
             </View>
             <View style={styles.examBadge}>
               <Text style={styles.examBadgeText}>{examCard.exam_name}</Text>
@@ -268,11 +289,11 @@ export function AdmitCardPDF({ student, examCard }: Props) {
             <View style={styles.studentInfo}>
               {[
                 ["Student Name",    student.name],
-                ["Class / Section", `${student.class_name} — Sec ${student.section}`],
-                ["Roll Number",     student.roll_number],
+                ["Class / Section", `${student.class_name}${student.section ? ` — Sec ${student.section}` : ""}`],
+                ["Roll Number",     student.roll_number ?? "—"],
                 ["Student ID",      student.username],
-                ["Date of Birth",   student.dob],
-                ["Gender",          student.gender],
+                ["Date of Birth",   student.dob ?? "—"],
+                ["Gender",          student.gender ?? "—"],
               ].map(([label, value]) => (
                 <View key={label} style={styles.infoLine}>
                   <Text style={styles.infoLabel}>{label}:</Text>
@@ -337,7 +358,7 @@ export function AdmitCardPDF({ student, examCard }: Props) {
             <Text style={styles.footerText}>
               Generated: {new Date().toLocaleDateString("en-BD", { day: "2-digit", month: "short", year: "numeric" })}
             </Text>
-            <Text style={styles.footerText}>{SCHOOL_INFO.name} — Official Admit Card</Text>
+            <Text style={styles.footerText}>{schoolInfo.name} — Official Admit Card</Text>
           </View>
         </View>
       </Page>

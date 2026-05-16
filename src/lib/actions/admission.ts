@@ -168,6 +168,7 @@ export async function submitAdmission(formData: FormData): Promise<SubmitResult>
         guardianDob: emptyToNullDate(d.guardian_dob),
 
         className: d.class_name,
+        section: emptyToNull(d.section),
         sessionName: emptyToNull(d.session_name),
         division: emptyToNull(d.division),
         previousInstituteName: emptyToNull(d.previous_institute_name),

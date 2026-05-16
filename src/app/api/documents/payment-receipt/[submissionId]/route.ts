@@ -1,25 +1,39 @@
 // app/api/documents/payment-receipt/[submissionId]/route.ts
-// Returns a PDF payment receipt for a verified payment submission.
-// Reuses renderComponentToBuffer from lib/documents/generate-pdf.ts.
-
-import { renderComponentToBuffer } from "@/lib/documents/generate-pdf";
+import { renderToBuffer } from "@react-pdf/renderer";
 import {
   PaymentReceiptPDF, type ReceiptData,
 } from "@/components/documents/pdf/PaymentReceiptPDF";
-import {
-  getSubmissionById, getSubmissionsByApplicationId,
-} from "@/lib/mock-data/payments";
-import { getStudentById } from "@/lib/mock-data/documents";
-import { MOCK_PAYMENT_SUBMISSIONS } from "@/lib/mock-data/payments";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/auth/helpers";
+import { createElement } from "react";
 
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ submissionId: string }> },
 ) {
+  const session = await getSession();
+  if (!session) return new Response(JSON.stringify({ error: "Unauthenticated" }), { status: 401 });
+
   const { submissionId } = await params;
 
-  // TODO: Replace mock lookups with real API calls using the session token
-  const submission = getSubmissionById(submissionId);
+  const [submission, schoolSetting] = await Promise.all([
+    db.paymentSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        admission: { select: { nameEn: true, className: true, sessionName: true } },
+        student: {
+          select: {
+            className: true,
+            rollNumber: true,
+            user: { select: { username: true } },
+            admission: { select: { nameEn: true } },
+          },
+        },
+      },
+    }),
+    db.schoolSetting.findUnique({ where: { id: 1 } }),
+  ]);
+
   if (!submission) {
     return new Response(JSON.stringify({ error: "Submission not found" }), {
       status: 404,
@@ -33,66 +47,73 @@ export async function GET(
     });
   }
 
-  // Build receipt data
-  let data: ReceiptData;
+  const schoolInfo = {
+    name: schoolSetting?.name ?? "School Name",
+    address: [schoolSetting?.address, schoolSetting?.city].filter(Boolean).join(", ") || "—",
+    phone: schoolSetting?.phone ?? "—",
+    email: schoolSetting?.email ?? "—",
+  };
+
   const receiptDate = new Date().toISOString().slice(0, 10);
+  const amountPaid = Number(submission.amountSent);
+
+  const subItem = {
+    id: submission.id,
+    status: submission.status,
+    method: submission.method,
+    transactionId: submission.transactionId,
+    phoneNumber: submission.phoneNumber ?? null,
+    amountSent: amountPaid,
+    paymentDate: submission.paymentDate.toISOString().slice(0, 10),
+  };
+
+  let data: ReceiptData;
 
   if (submission.paymentContext === "admission") {
-    const appId = submission.applicationId ?? "";
-    const allForApp = getSubmissionsByApplicationId(appId).filter((s) => s.status === "verified");
-    const amountPaid = allForApp.reduce((sum, s) => sum + s.amountSent, 0);
-    const totalFee = 500; // TODO: fetch from application record
-
     data = {
-      receiptNumber: submission.receiptNumber ?? `RCP-${new Date().getFullYear()}-${appId}`,
+      receiptNumber: submission.receiptNumber ?? `RCP-${new Date().getFullYear()}-${submission.admissionId}`,
       receiptDate,
-      payerName: "Applicant",     // TODO: fetch name from admission record
+      payerName: submission.admission?.nameEn ?? "Applicant",
       paymentContext: "admission",
-      applicationId: appId,
-      classApplied: "",           // TODO: fetch from admission record
-      academicYear: "2025-26",    // TODO: fetch from admission record
+      applicationId: submission.admissionId ? String(submission.admissionId) : undefined,
+      classApplied: submission.admission?.className ?? undefined,
+      academicYear: submission.admission?.sessionName ?? new Date().getFullYear().toString(),
       feeType: "Admission Fee",
-      totalFee,
+      totalFee: amountPaid,
       amountPaid,
-      balanceDue: Math.max(0, totalFee - amountPaid),
-      submissions: allForApp,
-      verifiedBy: submission.verifiedBy,
-      verifiedAt: submission.verifiedAt,
+      balanceDue: 0,
+      submissions: [subItem],
+      verifiedBy: submission.verifiedBy ?? undefined,
+      verifiedAt: submission.verifiedAt?.toISOString() ?? undefined,
+      schoolInfo,
     };
   } else {
-    // exam_fee context
-    const studentId = submission.studentId ?? "";
-    const student = studentId ? getStudentById(Number(studentId)) : null;
-    const allForExam = MOCK_PAYMENT_SUBMISSIONS.filter(
-      (s) => s.examFeeId === submission.examFeeId && s.status === "verified",
-    );
-    const amountPaid = allForExam.reduce((sum, s) => sum + s.amountSent, 0);
-    const totalFee = 2500; // TODO: fetch from exam fee record
-
+    const username = submission.student?.user?.username ?? undefined;
     data = {
-      receiptNumber: submission.receiptNumber ?? `RCP-${new Date().getFullYear()}-S${studentId}`,
+      receiptNumber: submission.receiptNumber ?? `RCP-${new Date().getFullYear()}-${submission.studentId}`,
       receiptDate,
-      payerName: student?.name ?? "Student",
-      paymentContext: "exam_fee",
-      studentId,
-      studentClass: student?.class_name,
-      rollNumber: student?.roll_number,
-      examName: "Annual Examination 2025–26", // TODO: fetch from exam fee record
-      academicYear: "2025-26",
-      feeType: "Exam Fee — Annual Examination 2025–26",
-      totalFee,
+      payerName: submission.student?.admission?.nameEn ?? "Student",
+      paymentContext: submission.paymentContext as "exam_fee" | "enrollment",
+      studentId: username ?? submission.studentId ?? undefined,
+      studentClass: submission.student?.className ?? undefined,
+      rollNumber: submission.student?.rollNumber ?? undefined,
+      academicYear: new Date().getFullYear().toString(),
+      feeType: submission.paymentContext === "enrollment" ? "Enrollment Fee" : "Exam Fee",
+      totalFee: amountPaid,
       amountPaid,
-      balanceDue: Math.max(0, totalFee - amountPaid),
-      submissions: allForExam,
-      verifiedBy: submission.verifiedBy,
-      verifiedAt: submission.verifiedAt,
+      balanceDue: 0,
+      submissions: [subItem],
+      verifiedBy: submission.verifiedBy ?? undefined,
+      verifiedAt: submission.verifiedAt?.toISOString() ?? undefined,
+      schoolInfo,
     };
   }
 
-  const buffer = await renderComponentToBuffer(PaymentReceiptPDF, { data });
-  const filename = `Receipt_${(data.applicationId ?? data.studentId ?? submissionId).replace(/[^a-z0-9-]/gi, "_")}_${new Date().getFullYear()}.pdf`;
+  const buffer = await renderToBuffer(createElement(PaymentReceiptPDF, { data }) as any);
+  const label = (data.applicationId ?? data.studentId ?? submissionId).replace(/[^a-z0-9-]/gi, "_");
+  const filename = `Receipt_${label}_${new Date().getFullYear()}.pdf`;
 
-  return new Response(buffer.buffer as ArrayBuffer, {
+  return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${filename}"`,

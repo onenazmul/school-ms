@@ -297,7 +297,7 @@ export default function ApplyPage() {
   const [sigFile,   setSigFile]     = useState<File | null>(null);
   const [samePerm,  setSamePerm]    = useState(false);
   const [config,    setConfig]      = useState<ActiveConfig | null>(null);
-  const [classList, setClassList]   = useState<string[]>([]);
+  const [classList, setClassList]   = useState<{ name: string; sections: { id: number; name: string }[] }[]>([]);
   const [configLoading, setConfigLoading] = useState(true);
   const [schoolName,    setSchoolName]    = useState("School");
   const [schoolContact, setSchoolContact] = useState("");
@@ -310,7 +310,7 @@ export default function ApplyPage() {
       fetch("/api/v1/settings").then((r) => r.json()).catch(() => ({ name: "", phone: "" })),
     ]).then(([configData, classData, settingsData]) => {
       setConfig(configData.config ?? null);
-      setClassList((classData.classes ?? []).map((c: { name: string }) => c.name));
+      setClassList(classData.classes ?? []);
       if (settingsData.name)  setSchoolName(settingsData.name);
       if (settingsData.phone) setSchoolContact(settingsData.phone);
       setConfigLoading(false);
@@ -341,7 +341,7 @@ export default function ApplyPage() {
       guardian_education: "", guardian_occupation: "",
       guardian_monthly_earning: "", guardian_mobile_no: "",
       guardian_nid_no: "", guardian_dob: "",
-      class_name: "", session_name: "", division: "",
+      class_name: "", section: "", session_name: "", division: "",
       previous_institute_name: "", sibling_details: "",
       password: "", confirm_password: "",
     },
@@ -400,9 +400,11 @@ export default function ApplyPage() {
   const isClosed = !configLoading && config?.applicationEndDate != null
     && new Date() > new Date(config.applicationEndDate);
 
-  // Reactive fee for selected class
-  const selectedClass = form.watch("class_name");
-  const currentFee = feeForClass(config, selectedClass);
+  // Reactive fee and sections for selected class
+  const selectedClassName = form.watch("class_name");
+  const currentFee = feeForClass(config, selectedClassName);
+  const selectedClassObj = classList.find((c) => c.name === selectedClassName);
+  const availableSections = selectedClassObj?.sections ?? [];
 
   if (admission) {
     return (
@@ -628,11 +630,16 @@ export default function ApplyPage() {
                 <FormField control={form.control} name="class_name" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Applying for Class <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={(v) => { field.onChange(v); form.setValue("section", ""); }}
+                      value={field.value}
+                    >
                       <FormControl><SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {(classList.length > 0 ? classList : ["Nursery","KG","Class 1","Class 2","Class 3","Class 4","Class 5"])
-                          .map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                        {(classList.length > 0
+                          ? classList.map(c => c.name)
+                          : ["Nursery","KG","Class 1","Class 2","Class 3","Class 4","Class 5"]
+                        ).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     {/* Per-class fee hint */}
@@ -643,6 +650,23 @@ export default function ApplyPage() {
                       </p>
                     )}
                     <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="section" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Section</FormLabel>
+                    {availableSections.length > 0 ? (
+                      <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select section" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {availableSections.map((s) => (
+                            <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <FormControl><Input placeholder="e.g. A, B" {...field} /></FormControl>
+                    )}
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="session_name" render={({ field }) => (

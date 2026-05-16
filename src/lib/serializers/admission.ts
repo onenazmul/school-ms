@@ -58,6 +58,7 @@ export function serializeAdmission(a: Admission) {
     guardian_dob: a.guardianDob ? a.guardianDob.toISOString().split("T")[0] : null,
 
     class_name: a.className,
+    section: a.section,
     session_name: a.sessionName,
     division: a.division,
     previous_institute_name: a.previousInstituteName,

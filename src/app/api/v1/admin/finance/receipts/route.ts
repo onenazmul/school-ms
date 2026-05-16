@@ -23,6 +23,7 @@ export async function GET(req: Request) {
       student: {
         select: {
           className: true,
+          section: true,
           admission: { select: { nameEn: true } },
         },
       },
@@ -45,6 +46,7 @@ export async function GET(req: Request) {
       receipt_number: r.receiptNumber,
       student_name: r.student.admission?.nameEn ?? "Unknown",
       class: r.student.className,
+      section: (r.student as any).section ?? null,
       amount: Number(r.receivedAmount),
       date: r.paymentDate.toISOString().split("T")[0],
       method: r.paymentMethod,

@@ -2,10 +2,8 @@
 import {
   Document, Page, View, Text, StyleSheet,
 } from "@react-pdf/renderer";
-import type { DocumentStudent } from "@/lib/mock-data/documents";
-import { SCHOOL_INFO } from "@/lib/mock-data/documents";
 
-const BRAND = SCHOOL_INFO.color;
+const BRAND = "#4F46E5";
 
 const styles = StyleSheet.create({
   page: {
@@ -126,15 +124,35 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-type Props = { student: DocumentStudent };
+export type IDCardStudent = {
+  id: string;
+  username: string;
+  name: string;
+  class_name: string;
+  section: string | null;
+  roll_number: string | null;
+  gender: string | null;
+  dob: string | null;
+  blood_group: string | null;
+  guardian_name: string | null;
+  guardian_phone: string | null;
+};
 
-export function IDCardPDF({ student }: Props) {
+export type SchoolInfo = {
+  name: string;
+  address: string;
+  phone: string;
+};
+
+type Props = { student: IDCardStudent; schoolInfo: SchoolInfo };
+
+export function IDCardPDF({ student, schoolInfo }: Props) {
   return (
     <Document>
       <Page size={[243, 153]} style={styles.page}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.schoolName}>{SCHOOL_INFO.name}</Text>
+          <Text style={styles.schoolName}>{schoolInfo.name}</Text>
           <Text style={styles.idCardLabel}>STUDENT ID</Text>
         </View>
 
@@ -149,21 +167,21 @@ export function IDCardPDF({ student }: Props) {
           {/* Info */}
           <View style={styles.info}>
             <Text style={styles.studentName}>{student.name}</Text>
-            <InfoRow label="Class"       value={`${student.class_name} — Sec ${student.section}`} />
-            <InfoRow label="Roll No."    value={student.roll_number} />
-            <InfoRow label="Date of Birth" value={student.dob} />
+            <InfoRow label="Class"       value={`${student.class_name}${student.section ? ` — Sec ${student.section}` : ""}`} />
+            <InfoRow label="Roll No."    value={student.roll_number ?? "—"} />
+            <InfoRow label="Date of Birth" value={student.dob ?? "—"} />
             {student.blood_group && (
               <InfoRow label="Blood Group" value={student.blood_group} />
             )}
-            <InfoRow label="Guardian"    value={student.guardian_name ?? ""} />
-            <InfoRow label="Contact"     value={student.guardian_phone ?? ""} />
+            <InfoRow label="Guardian"    value={student.guardian_name ?? "—"} />
+            <InfoRow label="Contact"     value={student.guardian_phone ?? "—"} />
           </View>
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            {SCHOOL_INFO.address} · {SCHOOL_INFO.phone}
+            {schoolInfo.address} · {schoolInfo.phone}
           </Text>
           <Text style={styles.idBadge}>{student.username}</Text>
         </View>

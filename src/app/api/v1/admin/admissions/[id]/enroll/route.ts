@@ -54,6 +54,7 @@ export async function POST(
         id: studentId,
         admissionId: admission.id,
         className: admission.className,
+        section: admission.section ?? null,
         sessionName: admission.sessionName,
         academicYear,
         rollNumber: nextRoll,

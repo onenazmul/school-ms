@@ -4,12 +4,12 @@
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 // ── UI ────────────────────────────────────────────────────────────────────────
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Separator } from "@/components/ui/separator";
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
@@ -25,27 +25,51 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 // ── Icons ─────────────────────────────────────────────────────────────────────
 import {
   Download, FileText, CreditCard, GraduationCap, Search, Eye,
-  Loader2, AlertTriangle, Users, X, Archive, BookOpen, Info,
+  Loader2, AlertTriangle, Users, X, Archive, BookOpen,
   Receipt, CheckCircle2, Clock, XCircle,
 } from "lucide-react";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-import type { DocumentStudent } from "@/lib/mock-data/documents";
-import { MOCK_STUDENTS, SCHOOL_INFO } from "@/lib/mock-data/documents";
-import type { PaymentSubmission } from "@/lib/mock-data/payments";
-import { MOCK_PAYMENT_SUBMISSIONS } from "@/lib/mock-data/payments";
+// ── Helpers ───────────────────────────────────────────────────────────────────
 import { formatBDT, fmtDate } from "@/lib/utils/format";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CLASSES = [
-  "Nursery", "KG", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5",
-  "Class 6", "Class 7", "Class 8", "Class 9", "Class 10",
-];
-const SECTIONS = ["A", "B", "C"];
-const ACADEMIC_YEARS = ["2025-26", "2024-25", "2023-24"];
+type DocStudent = {
+  id: string;
+  username: string | null;
+  name_en: string;
+  class_name: string;
+  section: string | null;
+  roll_number: string | null;
+  gender: string | null;
+  blood_group: string | null;
+  academic_year: string;
+};
+
+type ApiClass = {
+  id: string;
+  name: string;
+  sections: { id: string; name: string }[];
+};
+
+type ApiPaymentSub = {
+  id: string;
+  applicant_name: string | null;
+  applicant_username: string | null;
+  admission_id: number | null;
+  student_id: string | null;
+  payment_context: string;
+  method: string;
+  transaction_id: string;
+  amount_sent: string;
+  payment_date: string;
+  status: string;
+  admin_note: string | null;
+  receipt_number: string | null;
+  submitted_at: string;
+};
 
 type DocType = "id-card" | "result-card" | "admit-card";
 
@@ -105,21 +129,6 @@ async function fetchPreviewUrl(url: string): Promise<string> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MockDataBanner
-// ─────────────────────────────────────────────────────────────────────────────
-
-function MockDataBanner() {
-  return (
-    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-      <Info className="size-4 text-amber-600 shrink-0 mt-0.5" />
-      <p className="text-sm text-amber-800">
-        <strong>Preview mode</strong> — using sample data. Connect the student API to generate real documents.
-      </p>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // StudentSearchCombobox
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -127,25 +136,27 @@ function StudentSearchCombobox({
   value,
   onChange,
 }: {
-  value: DocumentStudent | null;
-  onChange: (s: DocumentStudent | null) => void;
+  value: DocStudent | null;
+  onChange: (s: DocStudent | null) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const results =
-    query.trim().length < 1
-      ? MOCK_STUDENTS
-      : MOCK_STUDENTS.filter((s) => {
-          const q = query.toLowerCase();
-          return (
-            s.name.toLowerCase().includes(q) ||
-            s.username.toLowerCase().includes(q) ||
-            s.roll_number.includes(q) ||
-            s.class_name.toLowerCase().includes(q)
-          );
-        });
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data, isLoading } = useQuery<{ students: DocStudent[] }>({
+    queryKey: ["doc-students", debouncedQuery],
+    queryFn: () =>
+      fetch(`/api/v1/admin/students?q=${encodeURIComponent(debouncedQuery)}&limit=20&status=Active`).then((r) => r.json()),
+    enabled: open,
+  });
+
+  const students = data?.students ?? [];
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -155,9 +166,9 @@ function StudentSearchCombobox({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  function select(s: DocumentStudent) {
+  function select(s: DocStudent) {
     onChange(s);
-    setQuery(s.name);
+    setQuery(s.name_en);
     setOpen(false);
   }
 
@@ -195,10 +206,14 @@ function StudentSearchCombobox({
       {open && (
         <div className="absolute z-50 w-full mt-1 bg-background border rounded-xl shadow-lg overflow-hidden">
           <div className="max-h-60 overflow-y-auto">
-            {results.length === 0 ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : students.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No students found</p>
             ) : (
-              results.map((s) => (
+              students.map((s) => (
                 <button
                   key={s.id}
                   onMouseDown={() => select(s)}
@@ -209,13 +224,13 @@ function StudentSearchCombobox({
                 >
                   <Avatar className="size-8 shrink-0">
                     <AvatarFallback className="text-xs bg-indigo-50 text-indigo-700 font-semibold">
-                      {initials(s.name)}
+                      {initials(s.name_en)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{s.name}</p>
+                    <p className="text-sm font-medium truncate">{s.name_en}</p>
                     <p className="text-xs text-muted-foreground">
-                      {s.class_name} · Sec {s.section} · Roll {s.roll_number}
+                      {s.class_name}{s.section ? ` · Sec ${s.section}` : ""}{s.roll_number ? ` · Roll ${s.roll_number}` : ""}
                     </p>
                   </div>
                   <span className="ml-auto text-xs font-mono text-muted-foreground shrink-0">
@@ -235,18 +250,18 @@ function StudentSearchCombobox({
 // StudentPreviewCard
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StudentPreviewCard({ student }: { student: DocumentStudent }) {
+function StudentPreviewCard({ student }: { student: DocStudent }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
       <Avatar className="size-10 shrink-0">
         <AvatarFallback className="bg-indigo-200 text-indigo-800 font-semibold text-sm">
-          {initials(student.name)}
+          {initials(student.name_en)}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0">
-        <p className="font-semibold text-sm text-indigo-900 truncate">{student.name}</p>
+        <p className="font-semibold text-sm text-indigo-900 truncate">{student.name_en}</p>
         <p className="text-xs text-indigo-700">
-          {student.class_name} · Sec {student.section} · Roll {student.roll_number}
+          {student.class_name}{student.section ? ` · Sec ${student.section}` : ""}{student.roll_number ? ` · Roll ${student.roll_number}` : ""}
         </p>
         <p className="text-xs font-mono text-indigo-500 mt-0.5">{student.username}</p>
       </div>
@@ -273,7 +288,7 @@ function DocumentPreviewDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  student: DocumentStudent | null;
+  student: DocStudent | null;
   docType: DocType;
 }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -307,9 +322,9 @@ function DocumentPreviewDialog({
     try {
       await downloadBlob(
         `/api/documents/${docType}/${student.id}`,
-        `${docType}-${student.username}.pdf`
+        `${docType}-${student.username ?? student.id}.pdf`
       );
-      toast.success(`${DOC_META[docType].label} downloaded for ${student.name}`);
+      toast.success(`${DOC_META[docType].label} downloaded for ${student.name_en}`);
       onClose();
     } catch (e: any) {
       toast.error(e.message ?? "Download failed");
@@ -329,12 +344,12 @@ function DocumentPreviewDialog({
             })()}
             {DOC_META[docType].label} Preview
             {student && (
-              <span className="font-normal text-muted-foreground">— {student.name}</span>
+              <span className="font-normal text-muted-foreground">— {student.name_en}</span>
             )}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="h-[560px] bg-muted/30">
+        <div className="h-140 bg-muted/30">
           {loading && (
             <div className="h-full flex flex-col items-center justify-center gap-3">
               <Loader2 className="size-8 animate-spin text-indigo-600" />
@@ -378,7 +393,7 @@ function DocumentPreviewDialog({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function IndividualDownload({ docType }: { docType: DocType }) {
-  const [student, setStudent] = useState<DocumentStudent | null>(null);
+  const [student, setStudent] = useState<DocStudent | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -388,9 +403,9 @@ function IndividualDownload({ docType }: { docType: DocType }) {
     try {
       await downloadBlob(
         `/api/documents/${docType}/${student.id}`,
-        `${docType}-${student.username}.pdf`
+        `${docType}-${student.username ?? student.id}.pdf`
       );
-      toast.success(`${DOC_META[docType].label} downloaded for ${student.name}`);
+      toast.success(`${DOC_META[docType].label} downloaded for ${student.name_en}`);
     } catch (e: any) {
       toast.error(e.message ?? "Download failed");
     } finally {
@@ -444,25 +459,40 @@ function IndividualDownload({ docType }: { docType: DocType }) {
 
 function ClassWiseDownload({ docType }: { docType: DocType }) {
   const [classFilter, setClassFilter] = useState("");
-  const [section, setSection] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
   const [academicYear, setAcademicYear] = useState("2025-26");
   const [downloading, setDownloading] = useState(false);
 
-  const studentCount = MOCK_STUDENTS.filter(
-    (s) =>
-      (!classFilter || s.class_name === classFilter) &&
-      (!section || s.section === section)
-  ).length;
+  const { data: classesData } = useQuery<{ classes: ApiClass[] }>({
+    queryKey: ["classes-for-docs"],
+    queryFn: () => fetch("/api/v1/admin/classes").then((r) => r.json()),
+  });
+
+  const classes = classesData?.classes ?? [];
+  const selectedClass = classes.find((c) => c.name === classFilter);
+  const sections = selectedClass?.sections ?? [];
+
+  const { data: countData } = useQuery<{ pagination: { total: number } }>({
+    queryKey: ["doc-student-count", classFilter, sectionFilter],
+    queryFn: () => {
+      const p = new URLSearchParams({ limit: "1", status: "Active" });
+      if (classFilter) p.set("class", classFilter);
+      if (sectionFilter) p.set("section", sectionFilter);
+      return fetch(`/api/v1/admin/students?${p}`).then((r) => r.json());
+    },
+  });
+
+  const studentCount = countData?.pagination?.total ?? 0;
 
   async function handleBulkDownload() {
     setDownloading(true);
     try {
       const body: Record<string, string> = { academic_year: academicYear };
       if (classFilter) body.class_name = classFilter;
-      if (section) body.section = section;
+      if (sectionFilter) body.section = sectionFilter;
 
       const label = classFilter
-        ? `${classFilter.replace(/\s+/g, "-").toLowerCase()}${section ? `-${section}` : ""}`
+        ? `${classFilter.replace(/\s+/g, "-").toLowerCase()}${sectionFilter ? `-${sectionFilter}` : ""}`
         : "all-students";
 
       await downloadBlob(
@@ -486,26 +516,36 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <p className="text-sm font-medium mb-1.5">Class</p>
-          <Select value={classFilter || "all"} onValueChange={(v) => setClassFilter(v === "all" ? "" : v)}>
+          <Select
+            value={classFilter || "all"}
+            onValueChange={(v) => {
+              setClassFilter(v === "all" ? "" : v);
+              setSectionFilter("");
+            }}
+          >
             <SelectTrigger className="h-10 text-sm">
               <SelectValue placeholder="All Classes" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Classes</SelectItem>
-              {CLASSES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {classes.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
 
         <div>
           <p className="text-sm font-medium mb-1.5">Section</p>
-          <Select value={section || "all"} onValueChange={(v) => setSection(v === "all" ? "" : v)}>
+          <Select
+            value={sectionFilter || "all"}
+            onValueChange={(v) => setSectionFilter(v === "all" ? "" : v)}
+            disabled={!classFilter || sections.length === 0}
+          >
             <SelectTrigger className="h-10 text-sm">
               <SelectValue placeholder="All Sections" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Sections</SelectItem>
-              {SECTIONS.map((s) => <SelectItem key={s} value={s}>Section {s}</SelectItem>)}
+              {sections.map((s) => <SelectItem key={s.id} value={s.name}>Section {s.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -517,7 +557,9 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              <SelectItem value="2025-26">2025-26</SelectItem>
+              <SelectItem value="2024-25">2024-25</SelectItem>
+              <SelectItem value="2023-24">2023-24</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -560,44 +602,52 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
 // PaymentReceiptsTab
 // ─────────────────────────────────────────────────────────────────────────────
 
-function receiptStatusBadge(status: PaymentSubmission["status"]) {
+function receiptStatusBadge(status: string) {
   switch (status) {
     case "verified":     return { label: "Verified",     cls: "bg-green-50 text-green-700 border-green-200",  icon: CheckCircle2 };
     case "pending":      return { label: "Pending",      cls: "bg-amber-50 text-amber-700 border-amber-200",  icon: Clock };
     case "under_review": return { label: "Under Review", cls: "bg-blue-50 text-blue-700 border-blue-200",    icon: Clock };
     case "rejected":     return { label: "Rejected",     cls: "bg-red-50 text-red-700 border-red-200",       icon: XCircle };
+    default:             return { label: status,         cls: "bg-muted text-muted-foreground border",       icon: Clock };
   }
 }
 
-function contextLabel(sub: PaymentSubmission) {
-  if (sub.paymentContext === "admission") return `Admission — ${sub.applicationId ?? ""}`;
-  return `Exam Fee — ${sub.examFeeId ?? ""}`;
+function contextLabel(sub: ApiPaymentSub) {
+  if (sub.payment_context === "admission") return `Admission — ${sub.applicant_username ?? sub.admission_id ?? ""}`;
+  if (sub.payment_context === "enrollment") return `Enrollment — ${sub.applicant_name ?? ""}`;
+  return `Exam Fee — ${sub.student_id ?? ""}`;
 }
 
 function PaymentReceiptsTab() {
   const [query, setQuery] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  const filtered = MOCK_PAYMENT_SUBMISSIONS.filter((s) => {
+  const { data, isLoading } = useQuery<{ submissions: ApiPaymentSub[] }>({
+    queryKey: ["doc-payment-submissions"],
+    queryFn: () => fetch("/api/v1/admin/payment-submissions").then((r) => r.json()),
+  });
+
+  const all = data?.submissions ?? [];
+  const filtered = all.filter((s) => {
     if (!query.trim()) return true;
     const q = query.toLowerCase();
     return (
       s.id.toLowerCase().includes(q) ||
-      (s.applicationId ?? "").toLowerCase().includes(q) ||
-      (s.examFeeId ?? "").toLowerCase().includes(q) ||
-      (s.transactionId ?? "").toLowerCase().includes(q) ||
-      (s.receiptNumber ?? "").toLowerCase().includes(q)
+      (s.applicant_name ?? "").toLowerCase().includes(q) ||
+      (s.applicant_username ?? "").toLowerCase().includes(q) ||
+      (s.transaction_id ?? "").toLowerCase().includes(q) ||
+      (s.receipt_number ?? "").toLowerCase().includes(q)
     );
   });
 
-  async function handleDownload(sub: PaymentSubmission) {
+  async function handleDownload(sub: ApiPaymentSub) {
     setDownloading(sub.id);
     try {
       await downloadBlob(
         `/api/documents/payment-receipt/${sub.id}`,
-        `Receipt-${sub.receiptNumber ?? sub.id}.pdf`
+        `Receipt-${sub.receipt_number ?? sub.id}.pdf`
       );
-      toast.success(`Receipt downloaded for ${sub.id}`);
+      toast.success(`Receipt downloaded`);
     } catch (e: any) {
       toast.error(e.message ?? "Download failed");
     } finally {
@@ -615,12 +665,11 @@ function PaymentReceiptsTab() {
         </div>
       </div>
 
-      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
           className="pl-9 pr-9 h-10 text-sm"
-          placeholder="Search by submission ID, application ID, TxnID…"
+          placeholder="Search by name, TxnID, receipt number…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -640,7 +689,7 @@ function PaymentReceiptsTab() {
           <thead className="bg-muted/40">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Submission</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Context</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Applicant</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Amount</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -648,7 +697,18 @@ function PaymentReceiptsTab() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <tr key={i}>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                  <td className="px-4 py-3 space-y-1.5"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-5 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-8 w-24 ml-auto" /></td>
+                </tr>
+              ))
+            ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
                   No submissions match your search.
@@ -664,13 +724,16 @@ function PaymentReceiptsTab() {
                   <tr key={sub.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3">
                       <p className="font-mono text-xs font-medium">{sub.id}</p>
-                      {sub.receiptNumber && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{sub.receiptNumber}</p>
+                      {sub.receipt_number && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{sub.receipt_number}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{contextLabel(sub)}</td>
-                    <td className="px-4 py-3 font-semibold">{formatBDT(sub.amountSent)}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(sub.paymentDate)}</td>
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium">{sub.applicant_name ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground">{contextLabel(sub)}</p>
+                    </td>
+                    <td className="px-4 py-3 font-semibold">{formatBDT(parseFloat(sub.amount_sent))}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(sub.payment_date)}</td>
                     <td className="px-4 py-3">
                       <span className={cn("inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border font-medium", badge.cls)}>
                         <BadgeIcon className="size-3" />
@@ -700,7 +763,15 @@ function PaymentReceiptsTab() {
 
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
-        {filtered.length === 0 ? (
+        {isLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="rounded-xl border p-4 space-y-3">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ))
+        ) : filtered.length === 0 ? (
           <div className="rounded-xl border p-8 text-center text-sm text-muted-foreground">
             No submissions match your search.
           </div>
@@ -715,7 +786,8 @@ function PaymentReceiptsTab() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-mono text-xs font-semibold">{sub.id}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{contextLabel(sub)}</p>
+                    <p className="text-sm font-medium mt-0.5">{sub.applicant_name ?? "—"}</p>
+                    <p className="text-xs text-muted-foreground">{contextLabel(sub)}</p>
                   </div>
                   <span className={cn("inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border font-medium shrink-0", badge.cls)}>
                     <BadgeIcon className="size-3" />
@@ -723,8 +795,8 @@ function PaymentReceiptsTab() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">{fmtDate(sub.paymentDate)}</span>
-                  <span className="font-semibold">{formatBDT(sub.amountSent)}</span>
+                  <span className="text-muted-foreground">{fmtDate(sub.payment_date)}</span>
+                  <span className="font-semibold">{formatBDT(parseFloat(sub.amount_sent))}</span>
                 </div>
                 <Button
                   size="sm"
@@ -804,7 +876,6 @@ function DocumentTab({ docType }: { docType: DocType }) {
 export default function DocumentsPage() {
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2">
@@ -817,10 +888,6 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* Mock data banner */}
-      <MockDataBanner />
-
-      {/* Tabs */}
       <Tabs defaultValue="id-card" className="space-y-6">
         <TabsList className="h-10 p-1">
           {(Object.entries(DOC_META) as [DocType, typeof DOC_META[DocType]][]).map(([key, meta]) => {

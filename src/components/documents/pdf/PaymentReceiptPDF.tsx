@@ -3,8 +3,16 @@
 // Uses shared design tokens from pdfStyles.ts.
 
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
-import type { PaymentSubmission } from "@/lib/mock-data/payments";
-import { SCHOOL_INFO } from "@/lib/mock-data/documents";
+
+export type ReceiptSubmissionItem = {
+  id: string;
+  status: string;
+  method: string;
+  transactionId: string;
+  phoneNumber: string | null;
+  amountSent: number;
+  paymentDate: string;
+};
 import {
   BRAND_COLOR, BRAND_LIGHT, BRAND_BORDER,
   MUTED_COLOR, TEXT_COLOR, BORDER_COLOR, BG_MUTED,
@@ -184,26 +192,24 @@ const S = StyleSheet.create({
 
 export type ReceiptData = {
   receiptNumber: string;
-  receiptDate: string;           // ISO date (date of receipt generation)
+  receiptDate: string;
   payerName: string;
-  paymentContext: "admission" | "exam_fee";
-  // admission context
+  paymentContext: "admission" | "exam_fee" | "enrollment";
   applicationId?: string;
   classApplied?: string;
-  // exam_fee context
   studentId?: string;
   studentClass?: string;
   rollNumber?: string;
   examName?: string;
-  // common
   academicYear: string;
-  feeType: string;               // "Admission Fee" | "Exam Fee — Annual 2025–26"
+  feeType: string;
   totalFee: number;
   amountPaid: number;
   balanceDue: number;
-  submissions: PaymentSubmission[];
+  submissions: ReceiptSubmissionItem[];
   verifiedBy?: string;
-  verifiedAt?: string;           // ISO datetime
+  verifiedAt?: string;
+  schoolInfo: { name: string; address: string; phone: string; email: string };
 };
 
 function fmtDate(iso: string) {
@@ -220,6 +226,7 @@ function fmtMethod(m: string) {
 
 export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
   const verifiedSubs = data.submissions.filter((s) => s.status === "verified");
+  const { schoolInfo } = data;
 
   return (
     <Document>
@@ -227,9 +234,9 @@ export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
         {/* School header */}
         <View style={S.schoolHeader}>
           <View>
-            <Text style={S.schoolName}>{SCHOOL_INFO.name}</Text>
-            <Text style={S.schoolSub}>{SCHOOL_INFO.address}</Text>
-            <Text style={S.schoolSub}>{SCHOOL_INFO.phone} · {SCHOOL_INFO.email}</Text>
+            <Text style={S.schoolName}>{schoolInfo.name}</Text>
+            <Text style={S.schoolSub}>{schoolInfo.address}</Text>
+            <Text style={S.schoolSub}>{schoolInfo.phone} · {schoolInfo.email}</Text>
           </View>
           <View>
             <Text style={S.receiptTitle}>PAYMENT RECEIPT</Text>
@@ -353,7 +360,7 @@ export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
         <View style={S.notice}>
           <Text style={S.noticeText}>
             This receipt is computer-generated and valid without a physical signature.
-            {"\n"}{SCHOOL_INFO.name} · {SCHOOL_INFO.address} · {SCHOOL_INFO.phone}
+            {"\n"}{schoolInfo.name} · {schoolInfo.address} · {schoolInfo.phone}
           </Text>
         </View>
       </Page>

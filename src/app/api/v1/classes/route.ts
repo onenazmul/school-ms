@@ -6,7 +6,15 @@ export async function GET() {
     const classes = await db.schoolClass.findMany({
       where: { isActive: true },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        sections: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+          select: { id: true, name: true },
+        },
+      },
     });
     return NextResponse.json({ classes });
   } catch (err) {
