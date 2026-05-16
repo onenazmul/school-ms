@@ -34,6 +34,7 @@ interface FeeConfig {
   type: string;
   applicable_classes: string[];
   due_day: number | null;
+  due_date: string | null;
   late_fee: number | null;
   is_active: boolean;
 }
@@ -55,6 +56,7 @@ const feeSchema = z.object({
   type: z.enum(["monthly", "quarterly", "yearly", "one_time"]),
   applicable_classes: z.array(z.string()).min(1, "Select at least one class"),
   due_day: z.coerce.number().min(1).max(31).optional().or(z.literal("")),
+  due_date: z.string().optional(),
   late_fee: z.coerce.number().min(0).optional().or(z.literal("")),
 });
 type FeeFormInput = z.infer<typeof feeSchema>;
@@ -80,6 +82,7 @@ function FeeForm({
       type: "monthly",
       applicable_classes: [],
       due_day: 10,
+      due_date: "",
       late_fee: 0,
       ...defaultValues,
     },
@@ -157,24 +160,31 @@ function FeeForm({
           </FormItem>
         )} />
 
-        <div className="grid grid-cols-2 gap-3">
-          {form.watch("type") !== "one_time" && (
-            <FormField control={form.control} name="due_day" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Due Day of Month</FormLabel>
-                <FormControl><Input type="number" min="1" max="31" {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-          )}
-          <FormField control={form.control} name="late_fee" render={({ field }) => (
+        {form.watch("type") === "one_time" ? (
+          <FormField control={form.control} name="due_date" render={({ field }) => (
             <FormItem>
-              <FormLabel>Late Fee (৳)</FormLabel>
-              <FormControl><Input type="number" min="0" {...field} /></FormControl>
+              <FormLabel>Due Date</FormLabel>
+              <FormControl><Input type="date" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
-        </div>
+        ) : (
+          <FormField control={form.control} name="due_day" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Due Day of Month</FormLabel>
+              <FormControl><Input type="number" min="1" max="31" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+        )}
+
+        <FormField control={form.control} name="late_fee" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Late Fee (৳)</FormLabel>
+            <FormControl><Input type="number" min="0" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )} />
 
         <Button type="submit" className="w-full" disabled={loading}>
           {loading && <Loader2 className="size-4 mr-2 animate-spin" />}
@@ -301,6 +311,11 @@ export default function FeeConfigPage() {
                   {fee.due_day && (
                     <p className="text-xs text-muted-foreground mt-1.5">Due: day {fee.due_day} of month</p>
                   )}
+                  {fee.due_date && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Due: {new Date(fee.due_date).toLocaleDateString("en-BD", { day: "2-digit", month: "long", year: "numeric" })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex gap-1 shrink-0">
@@ -348,6 +363,7 @@ export default function FeeConfigPage() {
                 type: editing.type as "monthly" | "quarterly" | "yearly" | "one_time",
                 applicable_classes: editing.applicable_classes ?? [],
                 due_day: editing.due_day ?? undefined,
+                due_date: editing.due_date ?? "",
                 late_fee: editing.late_fee ?? undefined,
               }}
               classes={classNames}

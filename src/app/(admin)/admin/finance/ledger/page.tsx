@@ -2,10 +2,12 @@
 // app/(admin)/admin/finance/ledger/page.tsx
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -22,40 +24,29 @@ type LedgerEntry = {
   studentId: string;
   studentName: string;
   class: string;
-  section: string;
-  type: "bill" | "payment" | "adjustment";
+  type: "bill" | "payment";
   description: string;
   debit: number;
   credit: number;
-  balance: number;
   date: string;
-  status: "paid" | "unpaid" | "partial" | "overdue";
+  status: "paid" | "unpaid" | "partial" | "overdue" | "waived";
 };
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
+type ClassItem = { id: number; name: string };
 
-const MOCK_LEDGER: LedgerEntry[] = [
-  { id:"1", studentId:"S001", studentName:"Rahim Uddin", class:"9", section:"A", type:"bill", description:"Tuition Fee - May 2025", debit:5500, credit:0, balance:5500, date:"2025-05-01", status:"paid" },
-  { id:"2", studentId:"S001", studentName:"Rahim Uddin", class:"9", section:"A", type:"payment", description:"Payment received - Cash", debit:0, credit:5500, balance:0, date:"2025-05-07", status:"paid" },
-  { id:"3", studentId:"S002", studentName:"Fatema Begum", class:"6", section:"B", type:"bill", description:"Tuition Fee - May 2025", debit:5500, credit:0, balance:5500, date:"2025-05-01", status:"overdue" },
-  { id:"4", studentId:"S003", studentName:"Karim Hossain", class:"10", section:"C", type:"bill", description:"Tuition Fee - May 2025", debit:5500, credit:0, balance:5500, date:"2025-05-01", status:"partial" },
-  { id:"5", studentId:"S003", studentName:"Karim Hossain", class:"10", section:"C", type:"payment", description:"Partial payment - bKash", debit:0, credit:3000, balance:2500, date:"2025-05-10", status:"partial" },
-  { id:"6", studentId:"S004", studentName:"Nasrin Akter", class:"8", section:"A", type:"bill", description:"Tuition Fee - May 2025", debit:5500, credit:0, balance:5500, date:"2025-05-01", status:"paid" },
-  { id:"7", studentId:"S004", studentName:"Nasrin Akter", class:"8", section:"A", type:"payment", description:"Payment received - Bank Transfer", debit:0, credit:5500, balance:0, date:"2025-05-05", status:"paid" },
-  { id:"8", studentId:"S005", studentName:"Jamal Sheikh", class:"7", section:"B", type:"bill", description:"Exam Fee - Q2 2025", debit:1200, credit:0, balance:1200, date:"2025-04-01", status:"unpaid" },
-];
+// ── Config ────────────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   paid:    { label: "Paid",    className: "bg-green-50 text-green-700 border-green-200" },
   unpaid:  { label: "Unpaid",  className: "bg-slate-50 text-slate-600 border-slate-200" },
   partial: { label: "Partial", className: "bg-amber-50 text-amber-700 border-amber-200" },
   overdue: { label: "Overdue", className: "bg-red-50 text-red-700 border-red-200" },
+  waived:  { label: "Waived",  className: "bg-violet-50 text-violet-700 border-violet-200" },
 };
 
 const TYPE_CONFIG = {
-  bill:       { label: "Bill",       dot: "bg-slate-400" },
-  payment:    { label: "Payment",    dot: "bg-green-500" },
-  adjustment: { label: "Adjustment", dot: "bg-indigo-500" },
+  bill:    { label: "Bill",    dot: "bg-slate-400" },
+  payment: { label: "Payment", dot: "bg-green-500" },
 };
 
 export default function LedgerPage() {
@@ -63,19 +54,25 @@ export default function LedgerPage() {
   const [classFilter, setClassFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const filtered = MOCK_LEDGER.filter((e) => {
-    const matchSearch =
-      !search ||
-      e.studentName.toLowerCase().includes(search.toLowerCase()) ||
-      e.studentId.toLowerCase().includes(search.toLowerCase());
-    const matchClass = classFilter === "all" || e.class === classFilter;
-    const matchStatus = statusFilter === "all" || e.status === statusFilter;
-    return matchSearch && matchClass && matchStatus;
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (classFilter !== "all") params.set("class", classFilter);
+  if (statusFilter !== "all") params.set("status", statusFilter);
+
+  const { data, isLoading } = useQuery<{ entries: LedgerEntry[]; total_debit: number; total_credit: number }>({
+    queryKey: ["ledger", search, classFilter, statusFilter],
+    queryFn: () => fetch(`/api/v1/admin/finance/ledger?${params}`).then((r) => r.json()),
   });
 
-  const totalDebit  = filtered.reduce((s, e) => s + e.debit, 0);
-  const totalCredit = filtered.reduce((s, e) => s + e.credit, 0);
-  const outstanding = filtered.filter((e) => e.balance > 0).reduce((s, e) => s + e.balance, 0);
+  const { data: classesData } = useQuery<{ classes: ClassItem[] }>({
+    queryKey: ["classes-list"],
+    queryFn: () => fetch("/api/v1/admin/classes").then((r) => r.json()),
+  });
+
+  const entries = data?.entries ?? [];
+  const totalDebit = data?.total_debit ?? 0;
+  const totalCredit = data?.total_credit ?? 0;
+  const outstanding = totalDebit - totalCredit;
 
   return (
     <div className="space-y-6">
@@ -101,7 +98,9 @@ export default function LedgerPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Total Billed</p>
-              <p className="font-semibold">৳{totalDebit.toLocaleString()}</p>
+              {isLoading
+                ? <Skeleton className="h-5 w-20 mt-1" />
+                : <p className="font-semibold">৳{totalDebit.toLocaleString()}</p>}
             </div>
           </CardContent>
         </Card>
@@ -112,7 +111,9 @@ export default function LedgerPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Total Collected</p>
-              <p className="font-semibold text-green-700">৳{totalCredit.toLocaleString()}</p>
+              {isLoading
+                ? <Skeleton className="h-5 w-20 mt-1" />
+                : <p className="font-semibold text-green-700">৳{totalCredit.toLocaleString()}</p>}
             </div>
           </CardContent>
         </Card>
@@ -123,7 +124,9 @@ export default function LedgerPage() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Outstanding</p>
-              <p className="font-semibold text-red-700">৳{outstanding.toLocaleString()}</p>
+              {isLoading
+                ? <Skeleton className="h-5 w-20 mt-1" />
+                : <p className="font-semibold text-red-700">৳{Math.max(0, outstanding).toLocaleString()}</p>}
             </div>
           </CardContent>
         </Card>
@@ -146,8 +149,8 @@ export default function LedgerPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Classes</SelectItem>
-            {["1","2","3","4","5","6","7","8","9","10"].map((c) => (
-              <SelectItem key={c} value={c}>Class {c}</SelectItem>
+            {(classesData?.classes ?? []).map((c) => (
+              <SelectItem key={c.id} value={c.name}>Class {c.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -175,62 +178,64 @@ export default function LedgerPage() {
               <th className="text-left py-3 px-4 font-medium text-muted-foreground">Type</th>
               <th className="text-right py-3 px-4 font-medium text-muted-foreground">Debit</th>
               <th className="text-right py-3 px-4 font-medium text-muted-foreground">Credit</th>
-              <th className="text-right py-3 px-4 font-medium text-muted-foreground">Balance</th>
               <th className="text-left py-3 px-4 font-medium text-muted-foreground">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filtered.map((entry) => {
-              const status = STATUS_CONFIG[entry.status];
-              const type = TYPE_CONFIG[entry.type];
-              return (
-                <tr key={entry.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
-                    {new Date(entry.date).toLocaleDateString("en-BD", { day: "2-digit", month: "short" })}
-                  </td>
-                  <td className="py-3 px-4 whitespace-nowrap">
-                    <p className="font-medium">{entry.studentName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Class {entry.class}{entry.section} · {entry.studentId}
-                    </p>
-                  </td>
-                  <td className="py-3 px-4 max-w-[200px] truncate text-muted-foreground">
-                    {entry.description}
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="flex items-center gap-1.5 text-xs">
-                      <span className={`size-1.5 rounded-full ${type.dot}`} />
-                      {type.label}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono">
-                    {entry.debit > 0 ? `৳${entry.debit.toLocaleString()}` : "—"}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-green-600">
-                    {entry.credit > 0 ? `৳${entry.credit.toLocaleString()}` : "—"}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-medium">
-                    {entry.balance > 0 ? (
-                      <span className="text-red-600">৳{entry.balance.toLocaleString()}</span>
-                    ) : (
-                      <span className="text-green-600">৳0</span>
-                    )}
-                  </td>
-                  <td className="py-3 px-4">
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${status.className}`}
-                    >
-                      {status.label}
-                    </Badge>
-                  </td>
-                </tr>
-              );
-            })}
+            {isLoading
+              ? Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
+                    <td className="py-3 px-4 space-y-1.5">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </td>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-40" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-4 w-16" /></td>
+                    <td className="py-3 px-4 text-right"><Skeleton className="h-4 w-14 ml-auto" /></td>
+                    <td className="py-3 px-4 text-right"><Skeleton className="h-4 w-14 ml-auto" /></td>
+                    <td className="py-3 px-4"><Skeleton className="h-5 w-14" /></td>
+                  </tr>
+                ))
+              : entries.map((entry) => {
+                  const status = STATUS_CONFIG[entry.status] ?? STATUS_CONFIG.unpaid;
+                  const type = TYPE_CONFIG[entry.type];
+                  return (
+                    <tr key={entry.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-4 text-muted-foreground whitespace-nowrap">
+                        {new Date(entry.date).toLocaleDateString("en-BD", { day: "2-digit", month: "short" })}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <p className="font-medium">{entry.studentName}</p>
+                        <p className="text-xs text-muted-foreground">Class {entry.class}</p>
+                      </td>
+                      <td className="py-3 px-4 max-w-50 truncate text-muted-foreground">
+                        {entry.description}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span className={`size-1.5 rounded-full ${type.dot}`} />
+                          {type.label}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono">
+                        {entry.debit > 0 ? `৳${entry.debit.toLocaleString()}` : "—"}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-green-600">
+                        {entry.credit > 0 ? `৳${entry.credit.toLocaleString()}` : "—"}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge variant="outline" className={`text-xs ${status.className}`}>
+                          {status.label}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
           </tbody>
         </table>
 
-        {filtered.length === 0 && (
+        {!isLoading && entries.length === 0 && (
           <div className="py-12 text-center text-sm text-muted-foreground">
             No ledger entries match your filters.
           </div>

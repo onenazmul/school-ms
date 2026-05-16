@@ -9,6 +9,11 @@ export async function GET() {
 
     const classes = await db.schoolClass.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        sections: {
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+        },
+      },
     });
     return NextResponse.json({ classes });
   } catch (err) {

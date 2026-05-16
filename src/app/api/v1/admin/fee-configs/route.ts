@@ -9,6 +9,7 @@ function serialize(fee: {
   type: string;
   applicableClasses: unknown;
   dueDay: number | null;
+  dueDate: Date | null;
   lateFee: unknown;
   isActive: boolean;
   createdAt: Date;
@@ -21,6 +22,7 @@ function serialize(fee: {
     type: fee.type,
     applicable_classes: fee.applicableClasses as string[],
     due_day: fee.dueDay,
+    due_date: fee.dueDate ? fee.dueDate.toISOString().split("T")[0] : null,
     late_fee: fee.lateFee != null ? Number(fee.lateFee) : null,
     is_active: fee.isActive,
   };
@@ -51,9 +53,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
     }
 
-    const { name, amount, type, applicable_classes, due_day, late_fee } = body;
+    const { name, amount, type, applicable_classes, due_day, due_date, late_fee } = body;
     if (!name || !amount || !type || !Array.isArray(applicable_classes) || applicable_classes.length === 0)
       return NextResponse.json({ message: "name, amount, type, applicable_classes are required" }, { status: 422 });
+
+    const parsedDueDate = due_date ? new Date(String(due_date)) : null;
+    if (due_date && parsedDueDate && isNaN(parsedDueDate.getTime()))
+      return NextResponse.json({ message: "Invalid due_date" }, { status: 422 });
 
     const fee = await db.feeConfig.create({
       data: {
@@ -63,6 +69,7 @@ export async function POST(req: Request) {
         type: String(type),
         applicableClasses: applicable_classes,
         dueDay: due_day != null ? Number(due_day) : null,
+        dueDate: parsedDueDate,
         lateFee: late_fee != null ? Number(late_fee) : null,
         isActive: true,
       },

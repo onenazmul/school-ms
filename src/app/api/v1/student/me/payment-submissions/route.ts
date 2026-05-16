@@ -1,22 +1,13 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createId } from "@paralleldrive/cuid2";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { logActivity } from "@/lib/activity-log";
 
-const submitSchema = z.object({
-  billId: z.string().min(1, "billId is required"),
-  method: z.enum(["bkash", "rocket", "bank_transfer"]),
-  transactionId: z.string().optional().nullable(),
-  phoneNumber: z.string().optional().nullable(),
-  accountHolderName: z.string().optional().nullable(),
-  branch: z.string().optional().nullable(),
-  depositSlipNo: z.string().optional().nullable(),
-  amountSent: z.coerce.number().positive(),
-  paymentDate: z.string().min(1),
-  notes: z.string().optional().nullable(),
-});
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
 
 export async function GET() {
   const session = await getSession();
@@ -31,27 +22,37 @@ export async function GET() {
   if (!user?.studentId) return NextResponse.json({ message: "Student not found" }, { status: 404 });
 
   const submissions = await db.paymentSubmission.findMany({
-    where: { studentId: user.studentId, paymentContext: "exam_fee" },
-    include: { bill: { include: { feeConfig: { select: { name: true } } } } },
+    where: { studentId: user.studentId, paymentContext: { in: ["fee", "exam_fee"] } },
     orderBy: { submittedAt: "desc" },
+    include: {
+      submissionItems: {
+        include: { bill: { include: { feeConfig: { select: { name: true } } } } },
+      },
+      // Legacy: single-bill submissions
+      bill: { include: { feeConfig: { select: { name: true } } } },
+    },
   });
 
   return NextResponse.json({
     submissions: submissions.map((s) => ({
       id: s.id,
-      bill_id: s.billId ?? null,
-      bill_name: s.bill?.feeConfig.name ?? null,
+      status: s.status,
+      amount_sent: Number(s.amountSent),
       method: s.method,
       transaction_id: s.transactionId,
-      phone_number: s.phoneNumber ?? null,
-      amount_sent: Number(s.amountSent),
-      payment_date: s.paymentDate.toISOString().split("T")[0],
-      notes: s.notes ?? null,
-      status: s.status,
+      submitted_at: s.submittedAt.toISOString(),
       admin_note: s.adminNote ?? null,
       receipt_number: s.receiptNumber ?? null,
       verified_at: s.verifiedAt?.toISOString() ?? null,
-      submitted_at: s.submittedAt.toISOString(),
+      bills: s.submissionItems.length > 0
+        ? s.submissionItems.map((item) => ({
+            bill_id: item.billId,
+            fee_name: item.bill.feeConfig.name,
+            amount: Number(item.amount),
+          }))
+        : s.bill
+          ? [{ bill_id: s.bill.id, fee_name: s.bill.feeConfig.name, amount: Number(s.amountSent) }]
+          : [],
     })),
   });
 }
@@ -67,67 +68,173 @@ export async function POST(req: Request) {
     select: { studentId: true },
   });
   if (!user?.studentId) return NextResponse.json({ message: "Student not found" }, { status: 404 });
+  const studentId = user.studentId;
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
+  let body: {
+    billIds?: string[];
+    advanceItems?: { feeConfigId: string; month: string; year: string }[];
+    method?: string;
+    transactionId?: string;
+    phoneNumber?: string;
+    amountSent?: number;
+    paymentDate?: string;
+    notes?: string;
+    screenshotUrl?: string;
+    accountHolderName?: string;
+    branch?: string;
+    depositSlipNo?: string;
+  };
+  try { body = await req.json(); } catch {
     return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = submitSchema.safeParse(body);
-  if (!parsed.success) {
-    const first = parsed.error.issues[0];
-    return NextResponse.json(
-      { message: `${first.path.join(".")}: ${first.message}` },
-      { status: 422 },
-    );
-  }
-  const d = parsed.data;
+  const {
+    billIds = [],
+    advanceItems = [],
+    method,
+    transactionId,
+    phoneNumber,
+    amountSent,
+    paymentDate,
+    notes,
+    screenshotUrl,
+    accountHolderName,
+    branch,
+    depositSlipNo,
+  } = body;
 
-  // Verify the bill belongs to this student
-  const bill = await db.bill.findFirst({
-    where: { id: d.billId, studentId: user.studentId },
+  if (!method || !amountSent || !paymentDate)
+    return NextResponse.json({ message: "method, amountSent, paymentDate are required" }, { status: 422 });
+  if (!transactionId && method !== "bank_transfer")
+    return NextResponse.json({ message: "transactionId is required" }, { status: 422 });
+  if (billIds.length === 0 && advanceItems.length === 0)
+    return NextResponse.json({ message: "Select at least one bill or advance month to pay" }, { status: 422 });
+
+  const parsedDate = new Date(paymentDate);
+  if (isNaN(parsedDate.getTime()))
+    return NextResponse.json({ message: "Invalid paymentDate" }, { status: 422 });
+
+  let resolvedBillIds: string[] = [...billIds];
+
+  // ── Validate existing bills ────────────────────────────────────────────────
+  if (billIds.length > 0) {
+    const bills = await db.bill.findMany({
+      where: { id: { in: billIds }, studentId },
+      include: {
+        submissionItems: {
+          include: { submission: { select: { status: true } } },
+        },
+        paymentSubmissions: {
+          where: { status: { in: ["pending", "under_review"] } },
+          select: { id: true },
+        },
+      },
+    });
+
+    if (bills.length !== billIds.length)
+      return NextResponse.json({ message: "One or more bills not found" }, { status: 422 });
+
+    for (const bill of bills) {
+      if (bill.status === "paid" || bill.status === "waived")
+        return NextResponse.json({ message: `Bill is already ${bill.status}` }, { status: 409 });
+
+      const hasPending =
+        bill.submissionItems.some((si) =>
+          si.submission.status === "pending" || si.submission.status === "under_review"
+        ) || bill.paymentSubmissions.length > 0;
+
+      if (hasPending)
+        return NextResponse.json({ message: "A pending submission already exists for one of the selected bills" }, { status: 409 });
+    }
+  }
+
+  // ── Auto-create advance bills ──────────────────────────────────────────────
+  if (advanceItems.length > 0) {
+    const student = await db.student.findUnique({ where: { id: studentId }, select: { className: true } });
+    if (!student) return NextResponse.json({ message: "Student not found" }, { status: 404 });
+
+    for (const item of advanceItems) {
+      if (!item.feeConfigId || !item.month || !item.year)
+        return NextResponse.json({ message: "Each advanceItem needs feeConfigId, month, year" }, { status: 422 });
+      if (!MONTHS.includes(item.month))
+        return NextResponse.json({ message: `Invalid month: ${item.month}` }, { status: 422 });
+
+      const feeConfig = await db.feeConfig.findUnique({ where: { id: item.feeConfigId } });
+      if (!feeConfig?.isActive)
+        return NextResponse.json({ message: `Fee config not found or inactive` }, { status: 422 });
+
+      const applicableClasses = Array.isArray(feeConfig.applicableClasses)
+        ? (feeConfig.applicableClasses as string[])
+        : [];
+      if (!applicableClasses.includes(student.className))
+        return NextResponse.json({ message: `Fee "${feeConfig.name}" does not apply to your class` }, { status: 422 });
+
+      const existing = await db.bill.findFirst({
+        where: { studentId, feeConfigId: item.feeConfigId, month: item.month, academicYear: item.year },
+      });
+
+      if (existing) {
+        if (existing.status === "paid" || existing.status === "waived")
+          return NextResponse.json({ message: `Bill for ${item.month} ${item.year} is already ${existing.status}` }, { status: 409 });
+        resolvedBillIds.push(existing.id);
+      } else {
+        const monthIndex = MONTHS.indexOf(item.month);
+        const dueDay = feeConfig.dueDay ?? 15;
+        const dueDate = new Date(`${item.year}-${String(monthIndex + 1).padStart(2, "0")}-${String(dueDay).padStart(2, "0")}`);
+
+        const newBill = await db.bill.create({
+          data: {
+            id: createId(),
+            studentId,
+            feeConfigId: item.feeConfigId,
+            amount: feeConfig.amount,
+            lateFee: 0,
+            dueDate,
+            month: item.month,
+            academicYear: item.year,
+            status: "unpaid",
+          },
+        });
+        resolvedBillIds.push(newBill.id);
+      }
+    }
+    resolvedBillIds = [...new Set(resolvedBillIds)];
+  }
+
+  // ── Get bill amounts ───────────────────────────────────────────────────────
+  const allBills = await db.bill.findMany({
+    where: { id: { in: resolvedBillIds } },
+    select: { id: true, amount: true, lateFee: true },
   });
-  if (!bill) return NextResponse.json({ message: "Bill not found" }, { status: 404 });
-  if (bill.status === "paid" || bill.status === "waived") {
-    return NextResponse.json({ message: "This bill is already settled" }, { status: 409 });
-  }
 
-  // Check for an existing pending submission for this bill
-  const existingPending = await db.paymentSubmission.findFirst({
-    where: {
-      billId: d.billId,
-      studentId: user.studentId,
-      status: { in: ["pending", "under_review"] },
-    },
-  });
-  if (existingPending) {
-    return NextResponse.json(
-      { message: "A payment submission is already under review for this bill" },
-      { status: 409 },
-    );
-  }
+  const effectiveTxnId = method === "bank_transfer" ? (depositSlipNo ?? transactionId ?? "") : (transactionId ?? "");
 
-  const txnId =
-    d.method === "bank_transfer" ? (d.depositSlipNo ?? "") : (d.transactionId ?? "");
+  // ── Create submission + items ──────────────────────────────────────────────
+  const submissionId = createId();
 
-  const submission = await db.paymentSubmission.create({
+  await db.paymentSubmission.create({
     data: {
-      id: createId(),
-      studentId: user.studentId,
-      billId: d.billId,
-      paymentContext: "exam_fee",
-      method: d.method,
-      transactionId: txnId,
-      phoneNumber: d.phoneNumber ?? null,
-      amountSent: d.amountSent,
-      paymentDate: new Date(d.paymentDate),
-      notes: d.notes ?? null,
-      accountHolderName: d.accountHolderName ?? null,
-      branch: d.branch ?? null,
-      depositSlipNo: d.depositSlipNo ?? null,
+      id: submissionId,
+      studentId,
+      paymentContext: "fee",
+      method: method!,
+      transactionId: effectiveTxnId,
+      phoneNumber: phoneNumber ?? null,
+      amountSent,
+      paymentDate: parsedDate,
+      notes: notes ?? null,
+      screenshotUrl: screenshotUrl ?? null,
+      accountHolderName: accountHolderName ?? null,
+      branch: branch ?? null,
+      depositSlipNo: depositSlipNo ?? null,
       status: "pending",
+      submissionItems: {
+        create: allBills.map((b) => ({
+          id: createId(),
+          billId: b.id,
+          amount: Number(b.amount) + Number(b.lateFee),
+        })),
+      },
     },
   });
 
@@ -135,14 +242,13 @@ export async function POST(req: Request) {
     module: "payment",
     action: "payment_submitted",
     entityType: "PaymentSubmission",
-    entityId: submission.id,
-    entityLabel: d.billId,
+    entityId: submissionId,
     actorId: session.user.id,
     actorName: session.user.name,
     actorRole: "student",
-    description: `Exam fee payment proof submitted via ${d.method} — ৳${d.amountSent}`,
-    metadata: { method: d.method, amount: d.amountSent, billId: d.billId },
+    description: `Payment proof submitted via ${method} for ${resolvedBillIds.length} bill(s) — ৳${amountSent}`,
+    metadata: { method, amountSent, billIds: resolvedBillIds },
   });
 
-  return NextResponse.json({ submission: { id: submission.id } }, { status: 201 });
+  return NextResponse.json({ id: submissionId, message: "Payment submitted for verification" }, { status: 201 });
 }

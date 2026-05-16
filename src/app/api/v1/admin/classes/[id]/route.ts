@@ -2,6 +2,68 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
+    if ((session.user as any)?.role !== "admin")
+      return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+    const { id } = await params;
+    const cls = await db.schoolClass.findUnique({
+      where: { id: Number(id) },
+      include: { sections: { orderBy: [{ sortOrder: "asc" }, { name: "asc" }] } },
+    });
+    if (!cls) return NextResponse.json({ message: "Not found" }, { status: 404 });
+
+    const { searchParams } = new URL(req.url);
+    const q       = searchParams.get("q")?.trim() ?? "";
+    const section = searchParams.get("section")?.trim() ?? "";
+
+    const studentWhere: Record<string, unknown> = { className: cls.name };
+    if (section) studentWhere.section = section;
+    if (q) studentWhere.OR = [
+      { admission: { nameEn: { contains: q } } },
+      { rollNumber: { contains: q } },
+    ];
+
+    const [students, totalCount, activeCount] = await Promise.all([
+      db.student.findMany({
+        where: studentWhere,
+        include: {
+          admission: { select: { nameEn: true, gender: true, fatherMobileNo: true, guardianMobileNo: true } },
+        },
+        orderBy: [{ rollNumber: "asc" }, { enrolledAt: "asc" }],
+        take: 100,
+      }),
+      db.student.count({ where: { className: cls.name } }),
+      db.student.count({ where: { className: cls.name, status: "Active" } }),
+    ]);
+
+    return NextResponse.json({
+      class: cls,
+      total_students: totalCount,
+      active_students: activeCount,
+      students: students.map((s) => ({
+        id: s.id,
+        name: s.admission?.nameEn ?? "Unknown",
+        roll: s.rollNumber ?? null,
+        section: s.section ?? null,
+        gender: s.admission?.gender ?? null,
+        phone: s.admission?.fatherMobileNo || s.admission?.guardianMobileNo || null,
+        status: s.status,
+        enrolled_at: s.enrolledAt.toISOString().split("T")[0],
+      })),
+    });
+  } catch (err) {
+    console.error("GET /api/v1/admin/classes/[id]:", err);
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -226,6 +226,7 @@ model FeeConfig {
   type             String
   applicableClasses Json
   dueDay           Int?
+  dueDate          DateTime? // one_time fees: specific due date
   lateFee          Decimal? @db.Decimal(10, 2)
   isActive         Boolean  @default(true)
 
@@ -255,6 +256,7 @@ model Bill {
 
   receiptItems       ReceiptItem[]
   paymentSubmissions PaymentSubmission[]
+  submissionItems    PaymentSubmissionItem[]
 }
 
 model Receipt {
@@ -320,6 +322,19 @@ model PaymentSubmission {
 
   submittedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  submissionItems PaymentSubmissionItem[]
+}
+
+model PaymentSubmissionItem {
+  id           String            @id
+  submissionId String
+  submission   PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  billId       String
+  bill         Bill              @relation(fields: [billId], references: [id])
+  amount       Decimal           @db.Decimal(10, 2)
+
+  @@unique([submissionId, billId])
 }
 
 model ExamResult {
@@ -347,12 +362,26 @@ model ExamResult {
 // ─────────────────────────────────────────────
 
 model SchoolClass {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  sortOrder Int      @default(0)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id        Int            @id @default(autoincrement())
+  name      String         @unique
+  sortOrder Int            @default(0)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  sections  ClassSection[]
+}
+
+model ClassSection {
+  id          Int         @id @default(autoincrement())
+  name        String      // e.g. "A", "B", "Science"
+  sortOrder   Int         @default(0)
+  isActive    Boolean     @default(true)
+  classId     Int
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([classId, name])
 }
 
 // ─────────────────────────────────────────────
@@ -431,6 +460,22 @@ model AdmissionMark {
 // ─────────────────────────────────────────────
 // SMS
 // ─────────────────────────────────────────────
+
+model Teacher {
+  id            String    @id
+  name          String
+  email         String?   @unique
+  phone         String?
+  subject       String?
+  designation   String    @default("Teacher")
+  qualification String?
+  joiningDate   DateTime?
+  classes       Json      @default("[]")
+  // active | inactive
+  status        String    @default("active")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
 
 model SmsConfig {
   id       Int     @id @default(1)

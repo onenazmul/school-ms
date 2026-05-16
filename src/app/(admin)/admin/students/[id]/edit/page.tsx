@@ -29,7 +29,7 @@ type StudentProfile = {
   name_en: string;
 };
 
-type SchoolClass = { id: number; name: string };
+type SchoolClass = { id: number; name: string; sections: { id: number; name: string }[] };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -64,6 +64,8 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
 
   const student = data?.student;
   const classes = classesData?.classes ?? [];
+  const selectedClass = classes.find((c) => c.name === className);
+  const availableSections = selectedClass?.sections ?? [];
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [className, setClassName]       = useState("");
@@ -180,7 +182,7 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
                 Class <span className="text-destructive">*</span>
               </Label>
               {classes.length > 0 ? (
-                <Select value={className} onValueChange={setClassName}>
+                <Select value={className} onValueChange={(v) => { setClassName(v); setSection(""); }}>
                   <SelectTrigger id="class_name">
                     <SelectValue placeholder="Select class" />
                   </SelectTrigger>
@@ -203,12 +205,25 @@ export default function EditStudentPage({ params }: { params: Promise<{ id: stri
             {/* Section */}
             <div className="space-y-1.5">
               <Label htmlFor="section">Section</Label>
-              <Input
-                id="section"
-                value={section}
-                onChange={(e) => setSection(e.target.value)}
-                placeholder="e.g. A"
-              />
+              {availableSections.length > 0 ? (
+                <Select value={section} onValueChange={setSection}>
+                  <SelectTrigger id="section">
+                    <SelectValue placeholder="Select section" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableSections.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id="section"
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                  placeholder="e.g. A"
+                />
+              )}
             </div>
 
             {/* Roll Number */}

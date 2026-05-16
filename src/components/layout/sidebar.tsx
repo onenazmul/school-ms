@@ -59,6 +59,7 @@ const NAV: Record<string, NavItem[]> = {
     { kind: "divider", label: "Finance" },
     { label: "Fee Config",    href: "/admin/finance/fee-config",   icon: Settings },
     { label: "Bulk Billing",  href: "/admin/finance/bulk-billing", icon: ListTodo },
+    { label: "Fee Overview",  href: "/admin/finance/overview",     icon: BarChart3 },
     { label: "Ledger",        href: "/admin/finance/ledger",       icon: Wallet },
     { label: "Receipts",      href: "/admin/finance/receipts",     icon: Receipt },
     { label: "Payments",      href: "/admin/admissions/payments",  icon: DollarSign },
@@ -129,7 +130,7 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex h-screen flex-col border-r bg-sidebar transition-all duration-300 ease-in-out",
-        collapsed ? "w-[64px]" : "w-[240px]"
+        collapsed ? "w-16" : "w-60"
       )}
     >
       {/* Logo + collapse */}

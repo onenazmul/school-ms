@@ -69,6 +69,16 @@ type PaymentSubmission = {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
+function contextLabel(ctx: string) {
+  switch (ctx) {
+    case "admission":  return "Admission";
+    case "enrollment": return "Enrollment";
+    case "exam_fee":   return "Exam Fee";
+    case "fee":        return "Student Fee";
+    default:           return ctx;
+  }
+}
+
 function methodLabel(m: string) {
   if (m === "bkash")         return "bKash";
   if (m === "rocket")        return "Rocket";
@@ -96,7 +106,7 @@ function exportCSV(subs: PaymentSubmission[]) {
   const rows = subs.map((s) => [
     s.id,
     s.applicant_username ?? s.applicant_name ?? "",
-    s.payment_context === "admission" ? "Admission" : s.payment_context === "enrollment" ? "Enrollment" : "Exam Fee",
+    contextLabel(s.payment_context),
     methodLabel(s.method),
     s.transaction_id,
     s.phone_number ?? "",
@@ -158,9 +168,13 @@ function PaymentReviewDialog({
         throw new Error((err as any).message ?? "Failed");
       }
       toast.success(
-        verdict === "verified" ? "Payment verified. Admission payment status set to Paid." :
-        verdict === "fake"     ? "Marked as Fake Payment Proof. Applicant notified." :
-                                 "Returned for correction. Applicant can resubmit.",
+        verdict === "verified"
+          ? submission.payment_context === "fee"
+            ? "Payment verified. Bills marked as paid and receipt created."
+            : "Payment verified. Admission payment status set to Paid."
+          : verdict === "fake"
+          ? "Marked as Fake Payment Proof. Applicant notified."
+          : "Returned for correction. Applicant can resubmit.",
       );
       onSaved();
       onClose();
@@ -532,6 +546,7 @@ export default function PaymentSubmissionsPage() {
                   <SelectItem value="admission">Admission Fee</SelectItem>
                   <SelectItem value="enrollment">Enrollment Fee</SelectItem>
                   <SelectItem value="exam_fee">Exam Fee</SelectItem>
+                  <SelectItem value="fee">Student Fee</SelectItem>
                 </SelectContent>
               </Select>
               {(search || statusFilter || methodFilter || contextFilter) && (
@@ -601,7 +616,7 @@ export default function PaymentSubmissionsPage() {
                           </td>
                           <td className="py-3 px-4">
                             <Badge variant="outline" className="text-xs">
-                              {s.payment_context === "admission" ? "Admission" : s.payment_context === "enrollment" ? "Enrollment" : "Exam Fee"}
+                              {contextLabel(s.payment_context)}
                             </Badge>
                           </td>
                           <td className="py-3 px-4">
