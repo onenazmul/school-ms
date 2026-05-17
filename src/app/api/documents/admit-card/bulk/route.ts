@@ -25,8 +25,8 @@ export async function POST(req: Request) {
   if (!session) return new Response(JSON.stringify({ error: "Unauthenticated" }), { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { class_name, section, academic_year } = body as {
-    class_name?: string; section?: string; academic_year?: string;
+  const { class_name, section, academic_year, exam_id } = body as {
+    class_name?: string; section?: string; academic_year?: string; exam_id?: string;
   };
 
   const where: Record<string, unknown> = { status: "Active" };
@@ -52,15 +52,20 @@ export async function POST(req: Request) {
     });
   }
 
-  // Find published exam applicable to this class
-  const exam = await db.exam.findFirst({
-    where: {
-      status: "published",
-      OR: [{ className: null }, { className: class_name ?? null }],
-    },
-    orderBy: { startDate: "desc" },
-    include: { schedule: { orderBy: { sortOrder: "asc" } } },
-  });
+  // Find exam: specific by ID if provided, otherwise most recent published for class
+  const exam = exam_id
+    ? await db.exam.findUnique({
+        where: { id: exam_id },
+        include: { schedule: { orderBy: { sortOrder: "asc" } } },
+      })
+    : await db.exam.findFirst({
+        where: {
+          status: "published",
+          OR: [{ className: null }, { className: class_name ?? null }],
+        },
+        orderBy: { startDate: "desc" },
+        include: { schedule: { orderBy: { sortOrder: "asc" } } },
+      });
 
   if (!exam) {
     return new Response(JSON.stringify({ error: "No published exam found for the selected class" }), {
@@ -69,23 +74,16 @@ export async function POST(req: Request) {
     });
   }
 
+  const dbRules = schoolSetting?.admitCardRules
+    ? (JSON.parse(schoolSetting.admitCardRules) as string[])
+    : [];
+
   const schoolInfo = {
     name: schoolSetting?.name ?? "School Name",
     address: [schoolSetting?.address, schoolSetting?.city].filter(Boolean).join(", ") || "—",
   };
 
-  const examCard = {
-    exam_name: exam.name,
-    academic_year: exam.academicYear,
-    schedule: exam.schedule.map((s) => ({
-      subject: s.subject,
-      date: s.examDate.toISOString().split("T")[0],
-      day: s.examDate.toLocaleDateString("en-US", { weekday: "long" }),
-      time: `${s.startTime} – ${s.endTime}`,
-      room: s.room ?? "—",
-    })),
-    instructions: (exam.instructions as string[] | null) ?? DEFAULT_INSTRUCTIONS,
-  };
+  const examInstructions = dbRules.length > 0 ? dbRules : ((exam.instructions as string[] | null) ?? DEFAULT_INSTRUCTIONS);
 
   const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
     const archive = archiver("zip", { zlib: { level: 6 } });
@@ -106,6 +104,22 @@ export async function POST(req: Request) {
         gender: student.admission?.gender ?? null,
         dob: fmtDate(student.admission?.dob),
         photo,
+      };
+      // Filter schedule to this student's class (empty className = shared across all classes)
+      const filteredSchedule = exam.schedule.filter(
+        (s) => s.className === "" || s.className === student.className
+      );
+      const examCard = {
+        exam_name: exam.name,
+        academic_year: exam.academicYear,
+        schedule: filteredSchedule.map((s) => ({
+          subject: s.subject,
+          date: s.examDate.toISOString().split("T")[0],
+          day: s.examDate.toLocaleDateString("en-US", { weekday: "long" }),
+          time: `${s.startTime} – ${s.endTime}`,
+          room: s.room ?? "—",
+        })),
+        instructions: examInstructions,
       };
       const element = createElement(AdmitCardPDF, { student: cardStudent, examCard, schoolInfo });
       const buf = await renderToBuffer(element as any);

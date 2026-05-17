@@ -138,3 +138,31 @@ export async function POST(req: Request, { params }: Ctx) {
 
   return NextResponse.json({ result: { id: result.id } }, { status: 201 });
 }
+
+export async function PATCH(req: Request, { params }: Ctx) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ message: "Unauthenticated" }, { status: 401 });
+  if ((session.user as any)?.role !== "admin")
+    return NextResponse.json({ message: "Forbidden" }, { status: 403 });
+
+  const { id: examId } = await params;
+  const body = await req.json().catch(() => ({}));
+  const { class_name, action } = body as { class_name?: string; action?: string };
+
+  if (action !== "publish" && action !== "unpublish")
+    return NextResponse.json({ message: "action must be 'publish' or 'unpublish'" }, { status: 400 });
+
+  // Find matching result IDs first (updateMany does not reliably support relation filters)
+  const matching = await db.examResult.findMany({
+    where: { examId, ...(class_name ? { student: { className: class_name } } : {}) },
+    select: { id: true },
+  });
+  if (matching.length === 0) return NextResponse.json({ updated: 0 });
+
+  const { count } = await db.examResult.updateMany({
+    where: { id: { in: matching.map((r) => r.id) } },
+    data: { publishedAt: action === "publish" ? new Date() : null },
+  });
+
+  return NextResponse.json({ updated: count });
+}

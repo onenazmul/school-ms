@@ -11,11 +11,12 @@ import type { SessionUser } from "@/lib/auth/types";
 import { signOut } from "@/lib/auth/client";
 import {
   LayoutDashboard, DollarSign, Receipt, UserCircle,
-  ChevronLeft, Menu, LogOut, BookOpen,
+  ChevronLeft, Menu, LogOut, BookOpen, FileText,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/student/dashboard", icon: LayoutDashboard },
+  { label: "Results",    href: "/student/results",   icon: FileText        },
   { label: "My Ledger",  href: "/student/ledger",   icon: DollarSign      },
   { label: "Receipts",   href: "/student/receipts",  icon: Receipt         },
   { label: "Exam Fees",  href: "/student/payments",  icon: BookOpen        },

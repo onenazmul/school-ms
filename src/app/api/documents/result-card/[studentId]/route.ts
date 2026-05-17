@@ -11,6 +11,18 @@ function fmtDate(d: Date | null | undefined) {
   return d.toISOString().split("T")[0];
 }
 
+function calcGPA(obtained: number, total: number): number {
+  if (total === 0) return 0;
+  const pct = (obtained / total) * 100;
+  if (pct >= 80) return 5.0;
+  if (pct >= 70) return 4.0;
+  if (pct >= 60) return 3.5;
+  if (pct >= 50) return 3.0;
+  if (pct >= 40) return 2.0;
+  if (pct >= 33) return 1.0;
+  return 0.0;
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ studentId: string }> }
@@ -19,18 +31,16 @@ export async function GET(
   if (!session) return new Response(JSON.stringify({ error: "Unauthenticated" }), { status: 401 });
 
   const { studentId } = await params;
+  const url = new URL(req.url);
+  const examId = url.searchParams.get("examId") ?? "";
 
-  const [student, examResult, schoolSetting] = await Promise.all([
+  const [student, schoolSetting] = await Promise.all([
     db.student.findUnique({
       where: { id: studentId },
       include: {
         admission: true,
         user: { select: { username: true } },
       },
-    }),
-    db.examResult.findFirst({
-      where: { studentId, publishedAt: { not: null } },
-      orderBy: { publishedAt: "desc" },
     }),
     db.schoolSetting.findUnique({ where: { id: 1 } }),
   ]);
@@ -42,11 +52,23 @@ export async function GET(
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  // Find result: filter by specific exam if examId provided, otherwise most recent published
+  const examResult = examId
+    ? await db.examResult.findFirst({
+        where: { studentId, examId, publishedAt: { not: null } },
+        orderBy: { publishedAt: "desc" },
+      })
+    : await db.examResult.findFirst({
+        where: { studentId, publishedAt: { not: null } },
+        orderBy: { publishedAt: "desc" },
+      });
+
   if (!examResult) {
-    return new Response(JSON.stringify({ error: "No published result found for this student" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: examId ? "No published result found for this exam" : "No published result found for this student" }),
+      { status: 404, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   const schoolInfo = {
@@ -74,8 +96,7 @@ export async function GET(
     subject_code:   s.subject_code ? String(s.subject_code) : null,
     max_marks:      Number(s.fullMarks ?? s.max_marks ?? 0),
     obtained_marks: Number(s.obtainedMarks ?? s.obtained_marks ?? 0),
-    grade:          String(s.grade ?? ""),
-    remarks:        String(s.remarks ?? ""),
+    remarks:        s.remarks ? String(s.remarks) : undefined,
   }));
 
   const totalObtained = subjects.reduce((a, s) => a + s.obtained_marks, 0);
@@ -87,13 +108,12 @@ export async function GET(
     subjects,
     total_obtained:     Number(examResult.totalMarks) || totalObtained,
     total_max:          totalMax,
-    percentage:         totalMax > 0 ? Math.round((totalObtained / totalMax) * 1000) / 10 : 0,
-    overall_grade:      examResult.grade ?? "—",
-    position:           examResult.position ?? 0,
-    total_students:     (examResult as any).totalStudents ?? 0,
-    attendance_present: (examResult as any).attendancePresent ?? 0,
-    attendance_total:   (examResult as any).attendanceTotal ?? 0,
-    pass:               (examResult as any).pass ?? true,
+    gpa:                calcGPA(totalObtained, totalMax),
+    position:           examResult.position ?? null,
+    total_students:     (examResult as any).totalStudents ?? null,
+    attendance_present: (examResult as any).attendancePresent ?? null,
+    attendance_total:   (examResult as any).attendanceTotal ?? null,
+    pass:               (examResult as any).pass ?? null,
     teacher_remarks:    (examResult as any).teacherRemarks ?? "",
   };
 

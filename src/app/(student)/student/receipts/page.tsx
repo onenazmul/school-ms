@@ -5,13 +5,17 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Receipt, GraduationCap, AlertCircle } from "lucide-react";
+import { Receipt, GraduationCap, AlertCircle, Download, Clock, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type ReceiptEntry = {
   id: string;
-  source: "fee_receipt" | "admission_payment" | "enrollment_payment";
+  download_url: string | null;
+  source: "fee_receipt" | "admission_payment" | "enrollment_payment" | "fee_submission";
+  status: string;
   receipt_number: string | null;
   payment_method: string;
   amount: number;
@@ -40,7 +44,117 @@ function methodLabel(method: string) {
 function sourceLabel(source: ReceiptEntry["source"]) {
   if (source === "admission_payment")  return "Admission Fee";
   if (source === "enrollment_payment") return "Enrollment Fee";
-  return null; // fee_receipt uses receipt_number as label
+  if (source === "fee_submission")     return "Fee Payment";
+  return null;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === "verified") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+        <CheckCircle2 className="size-3" />Verified
+      </span>
+    );
+  }
+  if (status === "pending" || status === "under_review") {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+        <Clock className="size-3" />Under Review
+      </span>
+    );
+  }
+  return null;
+}
+
+function ReceiptCard({ entry }: { entry: ReceiptEntry }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload() {
+    if (!entry.download_url) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(entry.download_url);
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `receipt-${entry.receipt_number ?? entry.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Could not download receipt");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  const label = sourceLabel(entry.source);
+  const isAdmission = entry.source === "admission_payment" || entry.source === "enrollment_payment";
+  const isPending = entry.status === "pending" || entry.status === "under_review";
+
+  return (
+    <Card className={cn("hover:shadow-sm transition-shadow", isPending && "border-amber-200")}>
+      <CardContent className="pt-4 pb-4">
+        <div className="flex items-start gap-3">
+          <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${isAdmission ? "bg-indigo-50" : isPending ? "bg-amber-50" : "bg-green-50"}`}>
+            {isAdmission
+              ? <GraduationCap className="size-5 text-indigo-600" />
+              : isPending
+                ? <Clock className="size-5 text-amber-600" />
+                : <Receipt className="size-5 text-green-600" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-medium text-sm">
+                  {entry.receipt_number ?? label ?? "Receipt"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {new Date(entry.payment_date).toLocaleDateString("en-BD", {
+                    day: "2-digit", month: "long", year: "numeric",
+                  })}
+                  {entry.issued_by ? ` · By ${entry.issued_by}` : ""}
+                </p>
+              </div>
+              <p className="text-base font-semibold shrink-0">৳{entry.amount.toLocaleString()}</p>
+            </div>
+
+            <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1 items-center">
+                {entry.items.map((item, i) => (
+                  <span key={i} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                    {item.name}
+                  </span>
+                ))}
+                <StatusBadge status={entry.status} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${METHOD_COLOR[entry.payment_method] ?? ""}`}
+                >
+                  {methodLabel(entry.payment_method)}
+                </Badge>
+                {entry.download_url && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs gap-1 px-2"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                  >
+                    <Download className="size-3" />
+                    {downloading ? "…" : "PDF"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function StudentReceiptsPage() {
@@ -73,16 +187,17 @@ export default function StudentReceiptsPage() {
     );
   }
 
-  const currentYear = new Date().getFullYear().toString();
-  const totalPaid = entries.reduce((s, r) => s + r.amount, 0);
-  const thisYearCount = entries.filter((r) => r.payment_date.startsWith(currentYear)).length;
+  const verifiedEntries = entries.filter((e) => e.status === "verified");
+  const pendingEntries  = entries.filter((e) => e.status === "pending" || e.status === "under_review");
+  const totalPaid = verifiedEntries.reduce((s, r) => s + r.amount, 0);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Fee Receipts</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {entries.length} receipt{entries.length !== 1 ? "s" : ""} · ৳{totalPaid.toLocaleString()} paid total
+          {verifiedEntries.length} verified · ৳{totalPaid.toLocaleString()} paid
+          {pendingEntries.length > 0 && ` · ${pendingEntries.length} under review`}
         </p>
       </div>
 
@@ -92,84 +207,26 @@ export default function StudentReceiptsPage() {
           <p className="text-sm text-muted-foreground">No receipts yet.</p>
         </div>
       ) : (
-        <>
-          {/* Progress bar for current year */}
-          <Card className="bg-linear-to-r from-indigo-50 to-violet-50 border-indigo-100">
-            <CardContent className="pt-5">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-indigo-900">{currentYear} Payment Progress</p>
-                <p className="text-sm font-semibold text-indigo-700">
-                  {thisYearCount} payment{thisYearCount !== 1 ? "s" : ""} this year
+        <div className="space-y-3">
+          {pendingEntries.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+                Under Review
+              </p>
+              {pendingEntries.map((r) => <ReceiptCard key={r.id} entry={r} />)}
+            </div>
+          )}
+          {verifiedEntries.length > 0 && (
+            <div className="space-y-2">
+              {pendingEntries.length > 0 && (
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-4">
+                  Verified
                 </p>
-              </div>
-              <div className="h-2 rounded-full bg-indigo-100 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-indigo-500"
-                  style={{ width: `${Math.min(100, (thisYearCount / 12) * 100).toFixed(0)}%` }}
-                />
-              </div>
-              <div className="flex justify-between mt-1.5 text-xs text-indigo-500">
-                <span>Jan</span><span>Jun</span><span>Dec</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Receipt list */}
-          <div className="space-y-3">
-            {entries.map((r) => {
-              const label = sourceLabel(r.source);
-              const isAdmission = r.source !== "fee_receipt";
-              return (
-                <Card key={r.id} className="hover:shadow-sm transition-shadow">
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-start gap-3">
-                      <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${isAdmission ? "bg-indigo-50" : "bg-green-50"}`}>
-                        {isAdmission
-                          ? <GraduationCap className="size-5 text-indigo-600" />
-                          : <Receipt className="size-5 text-green-600" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-medium text-sm">
-                              {r.receipt_number ?? label ?? "Receipt"}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(r.payment_date).toLocaleDateString("en-BD", {
-                                day: "2-digit", month: "long", year: "numeric",
-                              })}
-                              {r.issued_by ? ` · Issued by ${r.issued_by}` : ""}
-                            </p>
-                          </div>
-                          <p className="text-base font-semibold shrink-0">৳{r.amount.toLocaleString()}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-                          <div className="flex flex-wrap gap-1">
-                            {r.items.map((item, i) => (
-                              <span
-                                key={i}
-                                className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full"
-                              >
-                                {item.name}
-                              </span>
-                            ))}
-                          </div>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs ${METHOD_COLOR[r.payment_method] ?? ""}`}
-                          >
-                            {methodLabel(r.payment_method)}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </>
+              )}
+              {verifiedEntries.map((r) => <ReceiptCard key={r.id} entry={r} />)}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

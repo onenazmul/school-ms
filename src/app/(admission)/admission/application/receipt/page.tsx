@@ -7,9 +7,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Printer, ChevronLeft, CheckCircle2, GraduationCap, AlertCircle,
+  Clock, Download,
 } from "lucide-react";
 
 type PaymentSubmission = {
+  id: string;
+  status: string;
   method: string;
   transaction_id: string;
   phone_number: string | null;
@@ -167,28 +170,23 @@ export default function ReceiptPage() {
     );
   }
 
-  if (!admission || admission.payment_status !== "Paid") {
-    const submitted = admission?.payment_status === "Payment Submitted";
+  // No submission at all — prompt to pay
+  const hasAnySubmission = !!(admission?.payment_submission);
+  if (!admission || !hasAnySubmission) {
     return (
       <div className="space-y-4 pt-2">
         <h1 className="text-xl font-semibold print:hidden">Payment Receipt</h1>
         <div className="rounded-xl border bg-background p-8 text-center space-y-4">
-          <AlertCircle className={`size-8 mx-auto ${submitted ? "text-blue-500" : "text-amber-500"}`} />
+          <AlertCircle className="size-8 mx-auto text-amber-500" />
           <div>
-            <h2 className="font-semibold">
-              {submitted ? "Payment Under Verification" : "Receipt Not Available"}
-            </h2>
+            <h2 className="font-semibold">Receipt Not Available</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {submitted
-                ? "Your payment proof has been submitted and is being reviewed. The receipt will be available once verified by the school."
-                : "A receipt will be available here after the application fee has been verified by the school."}
+              A receipt will be available here after you submit your payment proof.
             </p>
           </div>
-          {!submitted && (
-            <Button asChild variant="outline">
-              <a href="/admission/application/payment">Submit Payment Proof</a>
-            </Button>
-          )}
+          <Button asChild variant="outline">
+            <a href="/admission/application/payment">Submit Payment Proof</a>
+          </Button>
           <Button asChild variant="ghost">
             <a href="/admission/application">← Back to Application</a>
           </Button>
@@ -196,6 +194,9 @@ export default function ReceiptPage() {
       </div>
     );
   }
+
+  const submissionStatus = admission.payment_submission?.status ?? "pending";
+  const isPending = submissionStatus === "pending" || submissionStatus === "under_review";
 
   const ps  = admission.payment_submission;
   const eps = admission.enrollment_payment_submission;
@@ -228,9 +229,29 @@ export default function ReceiptPage() {
         >
           <ChevronLeft className="size-4" /> Back
         </a>
-        <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-2">
-          <Printer className="size-4" />Print Receipt
-        </Button>
+        <div className="flex items-center gap-2">
+          {admission.payment_submission?.id && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={async () => {
+                const res = await fetch(`/api/documents/payment-receipt/${admission.payment_submission!.id}`);
+                if (!res.ok) return;
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a"); a.href = url;
+                a.download = `payment-receipt-${admission.username}.pdf`; a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              <Download className="size-4" />Download PDF
+            </Button>
+          )}
+          <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-2">
+            <Printer className="size-4" />Print
+          </Button>
+        </div>
       </div>
 
       {/* Receipt */}
@@ -258,18 +279,30 @@ export default function ReceiptPage() {
           </div>
         </div>
 
-        {/* ── Verified strip ── */}
-        <div className="bg-green-50 border-b border-green-100 px-6 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="size-4 text-green-600" />
-            <span className="text-sm font-semibold text-green-800">
-              {eps ? "Application & Enrollment Fee Receipt" : "Application Fee Receipt"} — Payment Verified
-            </span>
+        {/* ── Status strip ── */}
+        {isPending ? (
+          <div className="bg-amber-50 border-b border-amber-100 px-6 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="size-4 text-amber-600" />
+              <span className="text-sm font-semibold text-amber-800">
+                Payment Under Review — Provisional Receipt
+              </span>
+            </div>
+            <span className="text-xs text-amber-700">Pending admin verification</span>
           </div>
-          {ps?.verified_at && (
-            <span className="text-xs text-green-700">Verified {fmtDate(ps.verified_at)}</span>
-          )}
-        </div>
+        ) : (
+          <div className="bg-green-50 border-b border-green-100 px-6 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="size-4 text-green-600" />
+              <span className="text-sm font-semibold text-green-800">
+                {eps ? "Application & Enrollment Fee Receipt" : "Application Fee Receipt"} — Payment Verified
+              </span>
+            </div>
+            {ps?.verified_at && (
+              <span className="text-xs text-green-700">Verified {fmtDate(ps.verified_at)}</span>
+            )}
+          </div>
+        )}
 
         {/* ── Body ── */}
         <div className="px-6 py-5 space-y-5">

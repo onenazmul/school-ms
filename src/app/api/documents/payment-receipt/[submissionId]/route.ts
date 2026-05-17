@@ -40,8 +40,10 @@ export async function GET(
       headers: { "Content-Type": "application/json" },
     });
   }
-  if (submission.status !== "verified") {
-    return new Response(JSON.stringify({ error: "Receipt only available for verified submissions" }), {
+  // Allow receipt for any submitted status (pending, under_review, verified)
+  const printableStatuses = ["pending", "under_review", "verified"];
+  if (!printableStatuses.includes(submission.status)) {
+    return new Response(JSON.stringify({ error: "Receipt not available for this submission status" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
@@ -71,7 +73,7 @@ export async function GET(
 
   if (submission.paymentContext === "admission") {
     data = {
-      receiptNumber: submission.receiptNumber ?? `RCP-${new Date().getFullYear()}-${submission.admissionId}`,
+      receiptNumber: submission.receiptNumber ?? `PRV-${new Date().getFullYear()}-${submission.admissionId}`,
       receiptDate,
       payerName: submission.admission?.nameEn ?? "Applicant",
       paymentContext: "admission",
@@ -83,6 +85,7 @@ export async function GET(
       amountPaid,
       balanceDue: 0,
       submissions: [subItem],
+      status: submission.status,
       verifiedBy: submission.verifiedBy ?? undefined,
       verifiedAt: submission.verifiedAt?.toISOString() ?? undefined,
       schoolInfo,
@@ -90,7 +93,7 @@ export async function GET(
   } else {
     const username = submission.student?.user?.username ?? undefined;
     data = {
-      receiptNumber: submission.receiptNumber ?? `RCP-${new Date().getFullYear()}-${submission.studentId}`,
+      receiptNumber: submission.receiptNumber ?? `PRV-${new Date().getFullYear()}-${submission.studentId}`,
       receiptDate,
       payerName: submission.student?.admission?.nameEn ?? "Student",
       paymentContext: submission.paymentContext as "exam_fee" | "enrollment",
@@ -103,6 +106,7 @@ export async function GET(
       amountPaid,
       balanceDue: 0,
       submissions: [subItem],
+      status: submission.status,
       verifiedBy: submission.verifiedBy ?? undefined,
       verifiedAt: submission.verifiedAt?.toISOString() ?? undefined,
       schoolInfo,

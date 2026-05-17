@@ -19,16 +19,15 @@ export type ResultCardStudent = {
 export type ResultCardResult = {
   exam_term: string;
   academic_year: string;
-  subjects: { subject: string; subject_code?: string | null; max_marks: number; obtained_marks: number; grade: string; remarks: string }[];
+  subjects: { subject: string; subject_code?: string | null; max_marks: number; obtained_marks: number; remarks?: string }[];
   total_obtained: number;
   total_max: number;
-  percentage: number;
-  overall_grade: string;
-  position: number;
-  total_students: number;
-  attendance_present: number;
-  attendance_total: number;
-  pass: boolean;
+  gpa: number;
+  position: number | null;
+  total_students: number | null;
+  attendance_present: number | null;
+  attendance_total: number | null;
+  pass: boolean | null;
   teacher_remarks: string;
 };
 
@@ -37,6 +36,18 @@ export type ResultCardSchoolInfo = {
   address: string;
   phone: string;
 };
+
+function subjectGPA(obtained: number, max: number): string {
+  if (max === 0) return "—";
+  const pct = (obtained / max) * 100;
+  if (pct >= 80) return "5.00";
+  if (pct >= 70) return "4.00";
+  if (pct >= 60) return "3.50";
+  if (pct >= 50) return "3.00";
+  if (pct >= 40) return "2.00";
+  if (pct >= 33) return "1.00";
+  return "0.00";
+}
 
 const BRAND = "#4F46E5";
 
@@ -145,10 +156,10 @@ const styles = StyleSheet.create({
   tableRowAlt: {
     backgroundColor: "#F9FAFB",
   },
-  col_subject: { width: "35%" },
-  col_max:     { width: "15%", textAlign: "right" },
-  col_obt:     { width: "15%", textAlign: "right" },
-  col_grade:   { width: "15%", textAlign: "center" },
+  col_subject: { width: "38%" },
+  col_max:     { width: "14%", textAlign: "right" },
+  col_obt:     { width: "14%", textAlign: "right" },
+  col_gpa:     { width: "14%", textAlign: "center" },
   col_remarks: { width: "20%", textAlign: "center" },
   cellText: {
     fontSize: 7.5,
@@ -283,8 +294,10 @@ const styles = StyleSheet.create({
 type Props = { student: ResultCardStudent; result: ResultCardResult; schoolInfo: ResultCardSchoolInfo };
 
 export function ResultCardPDF({ student, result, schoolInfo }: Props) {
-  const attendancePct = result.attendance_total > 0
-    ? Math.round((result.attendance_present / result.attendance_total) * 100)
+  const showAttendance = (result.attendance_total ?? 0) > 0;
+  const showPosition   = (result.position ?? 0) > 0;
+  const attendancePct  = showAttendance
+    ? Math.round((result.attendance_present! / result.attendance_total!) * 100)
     : 0;
 
   return (
@@ -334,7 +347,7 @@ export function ResultCardPDF({ student, result, schoolInfo }: Props) {
           <Text style={[styles.tableHeaderText, styles.col_subject as any]}>Subject</Text>
           <Text style={[styles.tableHeaderText, styles.col_max as any]}>Max</Text>
           <Text style={[styles.tableHeaderText, styles.col_obt as any]}>Obtained</Text>
-          <Text style={[styles.tableHeaderText, styles.col_grade as any]}>Grade</Text>
+          <Text style={[styles.tableHeaderText, styles.col_gpa as any]}>GPA</Text>
           <Text style={[styles.tableHeaderText, styles.col_remarks as any]}>Remarks</Text>
         </View>
         {result.subjects.map((s, i) => (
@@ -344,48 +357,55 @@ export function ResultCardPDF({ student, result, schoolInfo }: Props) {
             </Text>
             <Text style={[styles.cellText, styles.col_max as any]}>{s.max_marks}</Text>
             <Text style={[styles.cellText, styles.col_obt as any]}>{s.obtained_marks}</Text>
-            <Text style={[styles.cellText, styles.col_grade as any]}>{s.grade}</Text>
-            <Text style={[styles.cellText, styles.col_remarks as any]}>{s.remarks}</Text>
+            <Text style={[styles.cellText, styles.col_gpa as any]}>{subjectGPA(s.obtained_marks, s.max_marks)}</Text>
+            <Text style={[styles.cellText, styles.col_remarks as any]}>{s.remarks ?? ""}</Text>
           </View>
         ))}
 
         {/* Summary cards */}
         <View style={styles.summaryBox}>
-          {[
-            ["Total Marks", `${result.total_obtained} / ${result.total_max}`],
-            ["Percentage", `${result.percentage.toFixed(1)}%`],
-            ["Overall Grade", result.overall_grade],
-            ["Position", `${result.position} of ${result.total_students}`],
-          ].map(([label, value]) => (
-            <View key={label} style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>{label}</Text>
-              <Text style={styles.summaryValue}>{value}</Text>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Total Marks</Text>
+            <Text style={styles.summaryValue}>{result.total_obtained} / {result.total_max}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>GPA</Text>
+            <Text style={styles.summaryValue}>{result.gpa.toFixed(2)}</Text>
+          </View>
+          {showPosition && (
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Position</Text>
+              <Text style={styles.summaryValue}>{result.position} of {result.total_students}</Text>
             </View>
-          ))}
+          )}
         </View>
 
-        {/* Attendance */}
-        <View style={styles.attendanceRow}>
-          <View style={styles.attendanceBox}>
-            <Text style={styles.attendanceLabel}>Days Present</Text>
-            <Text style={styles.attendanceValue}>{result.attendance_present}</Text>
+        {/* Attendance — only when provided */}
+        {showAttendance && (
+          <View style={styles.attendanceRow}>
+            <View style={styles.attendanceBox}>
+              <Text style={styles.attendanceLabel}>Days Present</Text>
+              <Text style={styles.attendanceValue}>{result.attendance_present}</Text>
+            </View>
+            <View style={styles.attendanceBox}>
+              <Text style={styles.attendanceLabel}>Total Days</Text>
+              <Text style={styles.attendanceValue}>{result.attendance_total}</Text>
+            </View>
+            <View style={styles.attendanceBox}>
+              <Text style={styles.attendanceLabel}>Attendance %</Text>
+              <Text style={styles.attendanceValue}>{attendancePct}%</Text>
+            </View>
           </View>
-          <View style={styles.attendanceBox}>
-            <Text style={styles.attendanceLabel}>Total Days</Text>
-            <Text style={styles.attendanceValue}>{result.attendance_total}</Text>
-          </View>
-          <View style={styles.attendanceBox}>
-            <Text style={styles.attendanceLabel}>Attendance %</Text>
-            <Text style={styles.attendanceValue}>{attendancePct}%</Text>
-          </View>
-        </View>
+        )}
 
-        {/* Pass/Fail stamp */}
-        <View style={result.pass ? styles.passStamp : styles.failStamp}>
-          <Text style={[styles.stampText, { color: result.pass ? "#16A34A" : "#DC2626" }]}>
-            {result.pass ? "PASSED" : "FAILED"}
-          </Text>
-        </View>
+        {/* Pass/Fail stamp — only when provided */}
+        {result.pass !== null && (
+          <View style={result.pass ? styles.passStamp : styles.failStamp}>
+            <Text style={[styles.stampText, { color: result.pass ? "#16A34A" : "#DC2626" }]}>
+              {result.pass ? "PASSED" : "FAILED"}
+            </Text>
+          </View>
+        )}
 
         {/* Teacher remarks */}
         {result.teacher_remarks && (

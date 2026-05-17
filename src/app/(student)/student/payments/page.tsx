@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   BookOpen, CreditCard, Clock, CheckCircle2, AlertCircle,
-  CalendarClock, ChevronDown, ChevronRight, Plus, Loader2,
+  CalendarClock, ChevronDown, ChevronRight, Plus, Loader2, Download,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -591,11 +591,35 @@ export default function StudentPaymentsPage() {
                                 <Badge variant="outline" className={cn("text-xs mt-1", badge.cls)}>{badge.label}</Badge>
                               </div>
                             </div>
-                            {status === "pending" && (
-                              <p className="text-xs text-amber-600 mt-1.5">
-                                Payment proof submitted. Awaiting admin verification.
-                              </p>
-                            )}
+                            {status === "pending" && (() => {
+                              const pendingSub = bill.submissions.find(
+                                (s) => s.status === "pending" || s.status === "under_review",
+                              );
+                              return (
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <p className="text-xs text-amber-600">
+                                    Payment proof submitted. Awaiting admin verification.
+                                  </p>
+                                  {pendingSub && (
+                                    <button
+                                      className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-700 font-medium shrink-0"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        const res = await fetch(`/api/documents/payment-receipt/${pendingSub.id}`);
+                                        if (!res.ok) return;
+                                        const blob = await res.blob();
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement("a"); a.href = url;
+                                        a.download = `receipt-${pendingSub.id}.pdf`; a.click();
+                                        URL.revokeObjectURL(url);
+                                      }}
+                                    >
+                                      <Download className="size-3" />Provisional Receipt
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -619,6 +643,25 @@ export default function StudentPaymentsPage() {
                               <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200 font-mono">
                                 {bill.submissions.find((s) => s.status === "verified")!.receipt_number}
                               </Badge>
+                            )}
+                            {bill.submissions.find((s) => s.status === "verified") && (
+                              <button
+                                className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-indigo-600 transition-colors"
+                                title="Download receipt PDF"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const sub = bill.submissions.find((s) => s.status === "verified")!;
+                                  const res = await fetch(`/api/documents/payment-receipt/${sub.id}`);
+                                  if (!res.ok) return;
+                                  const blob = await res.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a"); a.href = url;
+                                  a.download = `receipt-${sub.id}.pdf`; a.click();
+                                  URL.revokeObjectURL(url);
+                                }}
+                              >
+                                <Download className="size-3" />
+                              </button>
                             )}
                           </div>
                         </div>

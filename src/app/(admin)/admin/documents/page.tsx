@@ -26,7 +26,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Download, FileText, CreditCard, GraduationCap, Search, Eye,
   Loader2, AlertTriangle, Users, X, Archive, BookOpen,
-  Receipt, CheckCircle2, Clock, XCircle,
+  Receipt, CheckCircle2, Clock, XCircle, CalendarX,
 } from "lucide-react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,6 +52,15 @@ type ApiClass = {
   id: string;
   name: string;
   sections: { id: string; name: string }[];
+};
+
+type ApiExam = {
+  id: string;
+  name: string;
+  academic_year: string;
+  class_name: string | null;
+  status: string;
+  start_date: string | null;
 };
 
 type ApiPaymentSub = {
@@ -102,6 +111,11 @@ function initials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
+function docUrl(docType: DocType, studentId: string, examId?: string) {
+  const base = `/api/documents/${docType}/${studentId}`;
+  return examId ? `${base}?examId=${examId}` : base;
+}
+
 async function downloadBlob(url: string, filename: string, method = "GET", body?: object) {
   const res = await fetch(url, {
     method,
@@ -123,7 +137,10 @@ async function downloadBlob(url: string, filename: string, method = "GET", body?
 
 async function fetchPreviewUrl(url: string): Promise<string> {
   const res = await fetch(url);
-  if (!res.ok) throw new Error("Preview failed");
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Preview failed" }));
+    throw new Error(err.error ?? "Preview failed");
+  }
   const blob = await res.blob();
   return URL.createObjectURL(blob);
 }
@@ -285,11 +302,13 @@ function DocumentPreviewDialog({
   onClose,
   student,
   docType,
+  examId,
 }: {
   open: boolean;
   onClose: () => void;
   student: DocStudent | null;
   docType: DocType;
+  examId?: string;
 }) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -303,7 +322,7 @@ function DocumentPreviewDialog({
     setError(null);
     setPdfUrl(null);
 
-    fetchPreviewUrl(`/api/documents/${docType}/${student.id}`)
+    fetchPreviewUrl(docUrl(docType, student.id, examId))
       .then((url) => {
         objectUrl = url;
         setPdfUrl(url);
@@ -314,14 +333,14 @@ function DocumentPreviewDialog({
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [open, student, docType]);
+  }, [open, student, docType, examId]);
 
   async function handleDownload() {
     if (!student) return;
     setDownloading(true);
     try {
       await downloadBlob(
-        `/api/documents/${docType}/${student.id}`,
+        docUrl(docType, student.id, examId),
         `${docType}-${student.username ?? student.id}.pdf`
       );
       toast.success(`${DOC_META[docType].label} downloaded for ${student.name_en}`);
@@ -392,17 +411,32 @@ function DocumentPreviewDialog({
 // IndividualDownload panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function IndividualDownload({ docType }: { docType: DocType }) {
+function IndividualDownload({
+  docType,
+  examId,
+}: {
+  docType: DocType;
+  examId?: string;
+}) {
   const [student, setStudent] = useState<DocStudent | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  const { data: resultCheckData, isLoading: resultCheckLoading } = useQuery<{ has_result: boolean }>({
+    queryKey: ["result-check", student?.id, examId],
+    queryFn: () =>
+      fetch(`/api/v1/admin/results/check?studentId=${student!.id}&examId=${examId}`).then((r) => r.json()),
+    enabled: docType === "result-card" && !!student && !!examId,
+  });
+  const resultUnavailable =
+    docType === "result-card" && !!student && !!examId && !resultCheckLoading && resultCheckData?.has_result === false;
 
   async function handleDownload() {
     if (!student) return;
     setDownloading(true);
     try {
       await downloadBlob(
-        `/api/documents/${docType}/${student.id}`,
+        docUrl(docType, student.id, examId),
         `${docType}-${student.username ?? student.id}.pdf`
       );
       toast.success(`${DOC_META[docType].label} downloaded for ${student.name_en}`);
@@ -422,11 +456,27 @@ function IndividualDownload({ docType }: { docType: DocType }) {
 
       {student && <StudentPreviewCard student={student} />}
 
+      {docType === "result-card" && student && examId && (
+        resultCheckLoading ? (
+          <Skeleton className="h-8 w-56" />
+        ) : resultCheckData?.has_result ? (
+          <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <CheckCircle2 className="size-3.5 shrink-0" />
+            Result published for this student in the selected exam
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            No published result for this student in the selected exam
+          </div>
+        )
+      )}
+
       <div className="flex gap-2">
         <Button
           variant="outline"
           className="flex-1 gap-2"
-          disabled={!student}
+          disabled={!student || resultUnavailable}
           onClick={() => setPreviewOpen(true)}
         >
           <Eye className="size-4" />
@@ -434,7 +484,7 @@ function IndividualDownload({ docType }: { docType: DocType }) {
         </Button>
         <Button
           className="flex-1 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-          disabled={!student || downloading}
+          disabled={!student || downloading || resultUnavailable}
           onClick={handleDownload}
         >
           {downloading
@@ -448,6 +498,7 @@ function IndividualDownload({ docType }: { docType: DocType }) {
         onClose={() => setPreviewOpen(false)}
         student={student}
         docType={docType}
+        examId={examId}
       />
     </div>
   );
@@ -457,11 +508,24 @@ function IndividualDownload({ docType }: { docType: DocType }) {
 // ClassWiseDownload panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ClassWiseDownload({ docType }: { docType: DocType }) {
+function ClassWiseDownload({
+  docType,
+  examId,
+  defaultAcademicYear,
+}: {
+  docType: DocType;
+  examId?: string;
+  defaultAcademicYear?: string;
+}) {
   const [classFilter, setClassFilter] = useState("");
   const [sectionFilter, setSectionFilter] = useState("");
-  const [academicYear, setAcademicYear] = useState("2025-26");
+  const [academicYear, setAcademicYear] = useState("");
   const [downloading, setDownloading] = useState(false);
+
+  // Seed academic year once default arrives
+  useEffect(() => {
+    if (defaultAcademicYear && !academicYear) setAcademicYear(defaultAcademicYear);
+  }, [defaultAcademicYear]);
 
   const { data: classesData } = useQuery<{ classes: ApiClass[] }>({
     queryKey: ["classes-for-docs"],
@@ -487,9 +551,11 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
   async function handleBulkDownload() {
     setDownloading(true);
     try {
-      const body: Record<string, string> = { academic_year: academicYear };
+      const body: Record<string, string> = {};
+      if (academicYear) body.academic_year = academicYear;
       if (classFilter) body.class_name = classFilter;
       if (sectionFilter) body.section = sectionFilter;
+      if (examId) body.exam_id = examId;
 
       const label = classFilter
         ? `${classFilter.replace(/\s+/g, "-").toLowerCase()}${sectionFilter ? `-${sectionFilter}` : ""}`
@@ -552,16 +618,12 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
 
         <div>
           <p className="text-sm font-medium mb-1.5">Academic Year</p>
-          <Select value={academicYear} onValueChange={setAcademicYear}>
-            <SelectTrigger className="h-10 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="2025-26">2025-26</SelectItem>
-              <SelectItem value="2024-25">2024-25</SelectItem>
-              <SelectItem value="2023-24">2023-24</SelectItem>
-            </SelectContent>
-          </Select>
+          <Input
+            className="h-10 text-sm"
+            placeholder="e.g. 2025-26"
+            value={academicYear}
+            onChange={(e) => setAcademicYear(e.target.value)}
+          />
         </div>
       </div>
 
@@ -575,6 +637,12 @@ function ClassWiseDownload({ docType }: { docType: DocType }) {
             {studentCount}
           </Badge>
         </div>
+      )}
+
+      {docType === "result-card" && (
+        <p className="text-xs text-muted-foreground">
+          Only students with a published result for the selected exam will be included in the ZIP.
+        </p>
       )}
 
       <Button
@@ -825,16 +893,106 @@ function PaymentReceiptsTab() {
 function DocumentTab({ docType }: { docType: DocType }) {
   const meta = DOC_META[docType];
   const Icon = meta.icon;
+  const needsExamSelect = docType === "admit-card" || docType === "result-card";
+
+  const [selectedExamId, setSelectedExamId] = useState<string>("");
+
+  const { data: examsData, isLoading: examsLoading } = useQuery<{ exams: ApiExam[] }>({
+    queryKey: ["exams-for-docs"],
+    queryFn: () => fetch("/api/v1/admin/exams").then((r) => r.json()),
+    enabled: needsExamSelect,
+  });
+
+  const { data: settingsData } = useQuery<{ setting: { academic_year: string } }>({
+    queryKey: ["school-setting"],
+    queryFn: () => fetch("/api/v1/admin/settings").then((r) => r.json()),
+  });
+
+  const allExams = examsData?.exams ?? [];
+  const publishedExams = allExams.filter((e) => e.status === "published");
+  const examOptions = publishedExams;
+
+  // Auto-select first option when list loads
+  useEffect(() => {
+    if (!selectedExamId && examOptions.length > 0) {
+      setSelectedExamId(examOptions[0].id);
+    }
+  }, [examOptions.length]);
+
+  const defaultAcademicYear = settingsData?.setting?.academic_year ?? "";
+
+  // Header
+  const header = (
+    <div className="flex items-center gap-2">
+      <Icon className={cn("size-5 shrink-0", meta.color)} />
+      <div>
+        <p className="font-semibold">{meta.label}</p>
+        <p className="text-xs text-muted-foreground">{meta.desc}</p>
+      </div>
+    </div>
+  );
+
+  // For admit-card and result-card: if no published exams, show empty state
+  if (needsExamSelect && !examsLoading && publishedExams.length === 0) {
+    return (
+      <div className="space-y-4">
+        {header}
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 flex items-start gap-3">
+          <CalendarX className="size-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-amber-900 text-sm">No published exams</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              {docType === "admit-card"
+                ? "Publish at least one exam from the Exams section to generate admit cards."
+                : "Publish at least one exam from the Exams section, then enter and publish student results to generate result cards."}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Icon className={cn("size-5 shrink-0", meta.color)} />
-        <div>
-          <p className="font-semibold">{meta.label}</p>
-          <p className="text-xs text-muted-foreground">{meta.desc}</p>
+      {header}
+
+      {/* Exam selector for admit-card and result-card */}
+      {needsExamSelect && (
+        <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+          <p className="text-sm font-medium">
+            {docType === "admit-card" ? "Select Exam" : "Select Exam"}
+          </p>
+          {examsLoading ? (
+            <Skeleton className="h-10 w-full max-w-sm" />
+          ) : examOptions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No exams found</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {examOptions.map((exam) => (
+                <button
+                  key={exam.id}
+                  onClick={() => setSelectedExamId(exam.id)}
+                  className={cn(
+                    "px-3 py-2 rounded-lg text-sm border transition-colors text-left",
+                    selectedExamId === exam.id
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-background border-border hover:border-indigo-300 text-foreground"
+                  )}
+                >
+                  <span className="font-medium">{exam.name}</span>
+                  <span className="ml-2 text-xs opacity-70">{exam.academic_year}</span>
+                  {exam.class_name && (
+                    <span className="ml-1 text-xs opacity-70">· {exam.class_name}</span>
+                  )}
+                  <span className="ml-2 text-xs font-medium px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                    Published
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Individual */}
@@ -848,7 +1006,10 @@ function DocumentTab({ docType }: { docType: DocType }) {
               <p className="text-xs text-muted-foreground">Search, preview & download single PDF</p>
             </div>
           </div>
-          <IndividualDownload docType={docType} />
+          <IndividualDownload
+            docType={docType}
+            examId={needsExamSelect ? selectedExamId : undefined}
+          />
         </div>
 
         {/* Class-wise */}
@@ -862,7 +1023,11 @@ function DocumentTab({ docType }: { docType: DocType }) {
               <p className="text-xs text-muted-foreground">Generate all PDFs as a ZIP download</p>
             </div>
           </div>
-          <ClassWiseDownload docType={docType} />
+          <ClassWiseDownload
+            docType={docType}
+            examId={needsExamSelect ? selectedExamId : undefined}
+            defaultAcademicYear={defaultAcademicYear}
+          />
         </div>
       </div>
     </div>

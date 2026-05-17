@@ -85,7 +85,11 @@ type Result = {
   roll_number: string | null;
   grade: string | null;
   position: number | null;
+  total_students: number | null;
+  attendance_present: number | null;
+  attendance_total: number | null;
   pass: boolean | null;
+  teacher_remarks: string | null;
   published_at: string | null;
   subjects: { subject: string; subject_code: string; fullMarks: number; obtainedMarks: number; grade: string; remarks: string }[];
 };
@@ -113,11 +117,19 @@ function ScheduleTab({ examId, examClassName, schedule, scheduleMode, refetch }:
   scheduleMode: string;
   refetch: () => void;
 }) {
-  const { data: settingsData } = useQuery<{ setting: { weekly_off_days: string[] } }>({
+  const { data: settingsData } = useQuery<{ setting: { weekly_off_days: string[]; session_start: string; academic_year: string } }>({
     queryKey: ["school-setting"],
     queryFn: () => fetch("/api/v1/admin/settings").then((r) => r.json()),
   });
   const offDayNames = settingsData?.setting?.weekly_off_days ?? ["Friday", "Saturday"];
+
+  // Pre-fill generator start date from session_start when first loaded
+  useEffect(() => {
+    if (genStartDate) return;
+    const ss = settingsData?.setting?.session_start;
+    if (ss) setGenStartDate(ss);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsData?.setting?.session_start]);
   const WDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const offDayNums = new Set(offDayNames.map((n) => WDAY_NAMES.indexOf(n)).filter((n) => n >= 0));
 
@@ -778,34 +790,88 @@ function ResultsTab({ examId, examClassName, schedule, scheduleMode }: {
   const results = resultsData?.results ?? [];
   const existingResultMap = new Map(results.map((r) => [r.student_id, r]));
 
-  // Local marks: studentId → subject → obtained marks (string for input)
-  // marks = user-typed only; dbMarks = pre-filled from DB (read-only baseline)
-  const [marks, setMarks] = useState<Record<string, Record<string, string>>>({});
-  const [dbMarks, setDbMarks] = useState<Record<string, Record<string, string>>>({});
-  const [dirtyRows, setDirtyRows] = useState<Set<string>>(new Set());
-  const [savedRows, setSavedRows] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
+  type ExtraInfo = { teacherRemarks: string; attendancePresent: string; attendanceTotal: string; position: string; totalStudents: string };
+  const emptyExtra = (): ExtraInfo => ({ teacherRemarks: "", attendancePresent: "", attendanceTotal: "", position: "", totalStudents: "" });
 
-  // Populate dbMarks when results load — never touches marks so user edits aren't overwritten
+  // marks = user-typed only; dbMarks = pre-filled from DB
+  const [marks,    setMarks]    = useState<Record<string, Record<string, string>>>({});
+  const [dbMarks,  setDbMarks]  = useState<Record<string, Record<string, string>>>({});
+  // per-subject remarks
+  const [subjectRemarks,   setSubjectRemarks]   = useState<Record<string, Record<string, string>>>({});
+  const [dbSubjectRemarks, setDbSubjectRemarks] = useState<Record<string, Record<string, string>>>({});
+  // student-level extras
+  const [extraInfo, setExtraInfo] = useState<Record<string, ExtraInfo>>({});
+  const [dbExtra,   setDbExtra]   = useState<Record<string, ExtraInfo>>({});
+
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [dirtyRows,    setDirtyRows]    = useState<Set<string>>(new Set());
+  const [savedRows,    setSavedRows]    = useState<Set<string>>(new Set());
+  const [saving,     setSaving]     = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
+  const unpublishedResults = results.filter((r) => !r.published_at);
+  const publishedCount = results.length - unpublishedResults.length;
+
+  // Populate from DB when results load
   useEffect(() => {
     if (!resultsData) return;
-    const loaded: Record<string, Record<string, string>> = {};
+    const lMarks: Record<string, Record<string, string>> = {};
+    const lRemarks: Record<string, Record<string, string>> = {};
+    const lExtra: Record<string, ExtraInfo> = {};
     for (const r of resultsData.results ?? []) {
-      loaded[r.student_id] = {};
+      lMarks[r.student_id] = {};
+      lRemarks[r.student_id] = {};
       for (const s of r.subjects ?? []) {
-        if (s.obtainedMarks != null) loaded[r.student_id][s.subject] = String(s.obtainedMarks);
+        if (s.obtainedMarks != null) lMarks[r.student_id][s.subject] = String(s.obtainedMarks);
+        if (s.remarks)               lRemarks[r.student_id][s.subject] = s.remarks;
       }
+      lExtra[r.student_id] = {
+        teacherRemarks:    r.teacher_remarks ?? "",
+        attendancePresent: r.attendance_present != null ? String(r.attendance_present) : "",
+        attendanceTotal:   r.attendance_total   != null ? String(r.attendance_total)   : "",
+        position:          r.position           != null ? String(r.position)           : "",
+        totalStudents:     r.total_students      != null ? String(r.total_students)     : "",
+      };
     }
-    setDbMarks(loaded);
+    setDbMarks(lMarks);
+    setDbSubjectRemarks(lRemarks);
+    setDbExtra(lExtra);
   }, [resultsData]);
 
-  function handleMarkChange(studentId: string, subject: string, value: string) {
-    setMarks((prev) => ({
-      ...prev,
-      [studentId]: { ...(prev[studentId] ?? {}), [subject]: value },
-    }));
+  function markDirty(studentId: string) {
     setDirtyRows((prev) => new Set(prev).add(studentId));
     setSavedRows((prev) => { const n = new Set(prev); n.delete(studentId); return n; });
+  }
+
+  function handleMarkChange(studentId: string, subject: string, value: string) {
+    setMarks((prev) => ({ ...prev, [studentId]: { ...(prev[studentId] ?? {}), [subject]: value } }));
+    markDirty(studentId);
+  }
+
+  function handleRemarkChange(studentId: string, subject: string, value: string) {
+    setSubjectRemarks((prev) => ({ ...prev, [studentId]: { ...(prev[studentId] ?? {}), [subject]: value } }));
+    markDirty(studentId);
+  }
+
+  function handleExtraChange(studentId: string, field: keyof ExtraInfo, value: string) {
+    setExtraInfo((prev) => ({ ...prev, [studentId]: { ...(prev[studentId] ?? emptyExtra()), [field]: value } }));
+    markDirty(studentId);
+  }
+
+  function toggleExpand(studentId: string) {
+    setExpandedRows((prev) => { const n = new Set(prev); n.has(studentId) ? n.delete(studentId) : n.add(studentId); return n; });
+  }
+
+  // Auto pass/fail: fails if any subject with a pass_mark threshold is below it
+  function computePass(studentId: string): boolean {
+    const effective = { ...(dbMarks[studentId] ?? {}), ...(marks[studentId] ?? {}) };
+    for (const s of classSubjects) {
+      const obtained = Number(effective[s.subject] ?? "");
+      if (!effective[s.subject]) continue;
+      const passMark = s.pass_marks ?? Math.ceil((s.full_marks ?? 100) * 0.33);
+      if (obtained < passMark) return false;
+    }
+    return true;
   }
 
   async function handleSave() {
@@ -815,31 +881,52 @@ function ResultsTab({ examId, examClassName, schedule, scheduleMode }: {
     let errorCount = 0;
     await Promise.all(
       toSave.map(async (studentId) => {
-        const studentMarks = marks[studentId] ?? {};
+        const effectiveMarks = { ...(dbMarks[studentId] ?? {}), ...(marks[studentId] ?? {}) };
+        const studentRmks   = { ...(dbSubjectRemarks[studentId] ?? {}), ...(subjectRemarks[studentId] ?? {}) };
+        const extra         = { ...(dbExtra[studentId] ?? emptyExtra()), ...(extraInfo[studentId] ?? {}) };
         const existingResult = existingResultMap.get(studentId);
-        // Only send subjects the user actually typed — server handles merging with existing
+
         const subjects = classSubjects
           .filter((s) => {
-            const v = studentMarks[s.subject];
-            return v !== "" && v !== undefined;
+            const hasMarks  = effectiveMarks[s.subject] !== "" && effectiveMarks[s.subject] !== undefined;
+            const hasRemark = !!studentRmks[s.subject];
+            return hasMarks || hasRemark;
           })
           .map((s) => ({
-            subject: s.subject,
-            subject_code: s.subject_code ?? "",
-            fullMarks: s.full_marks ?? 100,
-            obtainedMarks: Number(studentMarks[s.subject]),
+            subject:       s.subject,
+            subject_code:  s.subject_code ?? "",
+            fullMarks:     s.full_marks ?? 100,
+            obtainedMarks: effectiveMarks[s.subject] ? Number(effectiveMarks[s.subject]) : 0,
+            ...(studentRmks[s.subject] ? { remarks: studentRmks[s.subject] } : {}),
           }));
-        if (subjects.length === 0) {
-          // User dirtied the row but typed nothing — skip API call
+
+        const hasAnyData = subjects.length > 0 || extra.teacherRemarks || extra.attendancePresent || extra.position;
+        if (!hasAnyData) {
           setSavedRows((prev) => new Set(prev).add(studentId));
           setDirtyRows((prev) => { const n = new Set(prev); n.delete(studentId); return n; });
           return;
         }
+
+        // Auto pass/fail based on all marks (including unmodified DB marks)
+        const autoPass = computePass(studentId);
+
         try {
+          const body: Record<string, unknown> = {
+            student_id: studentId,
+            result_id:  existingResult?.id,
+            subjects,
+            pass: autoPass,
+          };
+          if (extra.teacherRemarks)    body.teacher_remarks   = extra.teacherRemarks;
+          if (extra.attendancePresent) body.attendance_present = Number(extra.attendancePresent);
+          if (extra.attendanceTotal)   body.attendance_total   = Number(extra.attendanceTotal);
+          if (extra.position)          body.position           = Number(extra.position);
+          if (extra.totalStudents)     body.total_students     = Number(extra.totalStudents);
+
           const r = await fetch(`/api/v1/admin/exams/${examId}/results`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ student_id: studentId, result_id: existingResult?.id, subjects }),
+            body: JSON.stringify(body),
           });
           if (!r.ok) throw new Error();
           setSavedRows((prev) => new Set(prev).add(studentId));
@@ -858,9 +945,29 @@ function ResultsTab({ examId, examClassName, schedule, scheduleMode }: {
     refetchResults();
   }
 
+  async function handlePublish() {
+    if (!selectedClass) return;
+    setPublishing(true);
+    try {
+      const r = await fetch(`/api/v1/admin/exams/${examId}/results`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ class_name: selectedClass, action: "publish" }),
+      });
+      if (!r.ok) throw new Error();
+      const json = await r.json();
+      toast.success(`Published results for ${json.updated} student${json.updated !== 1 ? "s" : ""}`);
+      refetchResults();
+    } catch {
+      toast.error("Failed to publish results");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Class selector + Save button */}
+      {/* Class selector + Save + Publish buttons */}
       <div className="flex items-center gap-3 flex-wrap">
         {!examClassName && (
           <>
@@ -893,6 +1000,21 @@ function ResultsTab({ examId, examClassName, schedule, scheduleMode }: {
             <span className="text-xs text-green-600 font-medium flex items-center gap-1">
               <CheckCircle2 className="size-3.5" />{savedRows.size} saved
             </span>
+          )}
+          {results.length > 0 && (
+            <Button
+              size="sm"
+              variant={unpublishedResults.length === 0 ? "outline" : "default"}
+              className={cn("gap-1.5", unpublishedResults.length > 0 && "bg-green-600 hover:bg-green-700 text-white")}
+              disabled={publishing || unpublishedResults.length === 0}
+              onClick={handlePublish}
+            >
+              {publishing
+                ? <><Loader2 className="size-3.5 animate-spin" />Publishing…</>
+                : unpublishedResults.length === 0
+                  ? <><CheckCircle2 className="size-3.5" />All published ({publishedCount})</>
+                  : <><Globe className="size-3.5" />Publish ({unpublishedResults.length})</>}
+            </Button>
           )}
           <Button
             size="sm"
@@ -940,33 +1062,117 @@ function ResultsTab({ examId, examClassName, schedule, scheduleMode }: {
             </thead>
             <tbody className="divide-y">
               {students.map((student) => {
-                const isDirty = dirtyRows.has(student.id);
-                const isSaved = savedRows.has(student.id);
+                const isDirty   = dirtyRows.has(student.id);
+                const isSaved   = savedRows.has(student.id);
+                const isExpanded = expandedRows.has(student.id);
+                const extra = { ...(dbExtra[student.id] ?? emptyExtra()), ...(extraInfo[student.id] ?? {}) };
+                const colSpan = 2 + classSubjects.length + 1;
                 return (
-                  <tr key={student.id} className={cn("hover:bg-muted/20", isDirty && "bg-amber-50/40")}>
-                    <td className="px-3 py-2 text-muted-foreground text-xs font-mono">{student.roll_number ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <p className="font-medium text-xs leading-tight truncate max-w-[130px]">{student.name_en}</p>
-                      {student.section && <p className="text-xs text-muted-foreground leading-tight">{student.section}</p>}
-                    </td>
-                    {classSubjects.map((s) => (
-                      <td key={s.id} className="px-1.5 py-1.5">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={s.full_marks ?? 100}
-                          className="h-7 w-16 text-center text-xs font-medium"
-                          value={marks[student.id]?.[s.subject] ?? dbMarks[student.id]?.[s.subject] ?? ""}
-                          placeholder="—"
-                          onChange={(e) => handleMarkChange(student.id, s.subject, e.target.value)}
-                        />
+                  <>
+                    <tr key={student.id} className={cn("hover:bg-muted/20", isDirty && "bg-amber-50/40")}>
+                      <td className="px-3 py-2 text-muted-foreground text-xs font-mono">{student.roll_number ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-xs leading-tight truncate max-w-[130px]">{student.name_en}</p>
+                        {student.section && <p className="text-xs text-muted-foreground leading-tight">{student.section}</p>}
                       </td>
-                    ))}
-                    <td className="px-2 py-2 text-center w-8">
-                      {saving && isDirty && <Loader2 className="size-3.5 animate-spin text-muted-foreground mx-auto" />}
-                      {isSaved && !isDirty && <CheckCircle2 className="size-3.5 text-green-500 mx-auto" />}
-                    </td>
-                  </tr>
+                      {classSubjects.map((s) => (
+                        <td key={s.id} className="px-1.5 py-1.5">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={s.full_marks ?? 100}
+                            className="h-7 w-16 text-center text-xs font-medium"
+                            value={marks[student.id]?.[s.subject] ?? dbMarks[student.id]?.[s.subject] ?? ""}
+                            placeholder="—"
+                            onChange={(e) => handleMarkChange(student.id, s.subject, e.target.value)}
+                          />
+                        </td>
+                      ))}
+                      <td className="px-2 py-2 text-center w-8">
+                        <div className="flex flex-col items-center gap-0.5">
+                          {saving && isDirty && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+                          {isSaved && !isDirty && <CheckCircle2 className="size-3.5 text-green-500" />}
+                          {!saving && !isSaved && existingResultMap.get(student.id) && (
+                            <span
+                              className={cn("block size-2 rounded-full", existingResultMap.get(student.id)!.published_at ? "bg-green-400" : "bg-gray-300")}
+                              title={existingResultMap.get(student.id)!.published_at ? "Published" : "Saved, not published"}
+                            />
+                          )}
+                          <button
+                            onClick={() => toggleExpand(student.id)}
+                            className="text-muted-foreground hover:text-foreground"
+                            title={isExpanded ? "Hide details" : "Add remark / attendance / position"}
+                          >
+                            {isExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${student.id}-extra`} className="bg-muted/10 border-b">
+                        <td colSpan={colSpan} className="px-4 py-3 space-y-3">
+                          {/* Per-subject remarks */}
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Subject Remarks</p>
+                            <div className="space-y-1.5">
+                              {classSubjects.map((s) => {
+                                const obtained = marks[student.id]?.[s.subject] ?? dbMarks[student.id]?.[s.subject] ?? "";
+                                const remark = subjectRemarks[student.id]?.[s.subject] ?? dbSubjectRemarks[student.id]?.[s.subject] ?? "";
+                                return (
+                                  <div key={s.id} className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground w-28 shrink-0 truncate">{s.subject}</span>
+                                    <span className="text-xs font-mono text-muted-foreground w-14 shrink-0">
+                                      {obtained ? `${obtained}/${s.full_marks ?? 100}` : "—"}
+                                    </span>
+                                    <Input
+                                      className="h-6 text-xs flex-1"
+                                      placeholder="Remark (e.g. Excellent, Needs improvement…)"
+                                      value={remark}
+                                      onChange={(e) => handleRemarkChange(student.id, s.subject, e.target.value)}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          {/* Student-level extras */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-dashed">
+                            <div className="sm:col-span-2">
+                              <p className="text-xs text-muted-foreground mb-1">Teacher's Overall Remark</p>
+                              <Input
+                                className="h-7 text-xs"
+                                placeholder="e.g. Excellent progress this term"
+                                value={extra.teacherRemarks}
+                                onChange={(e) => handleExtraChange(student.id, "teacherRemarks", e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Attendance (Present / Total)</p>
+                              <div className="flex gap-1">
+                                <Input type="number" min={0} className="h-7 text-xs" placeholder="178"
+                                  value={extra.attendancePresent}
+                                  onChange={(e) => handleExtraChange(student.id, "attendancePresent", e.target.value)} />
+                                <Input type="number" min={0} className="h-7 text-xs" placeholder="192"
+                                  value={extra.attendanceTotal}
+                                  onChange={(e) => handleExtraChange(student.id, "attendanceTotal", e.target.value)} />
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Position (rank / of)</p>
+                              <div className="flex gap-1">
+                                <Input type="number" min={1} className="h-7 text-xs" placeholder="1"
+                                  value={extra.position}
+                                  onChange={(e) => handleExtraChange(student.id, "position", e.target.value)} />
+                                <Input type="number" min={1} className="h-7 text-xs" placeholder="45"
+                                  value={extra.totalStudents}
+                                  onChange={(e) => handleExtraChange(student.id, "totalStudents", e.target.value)} />
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               })}
             </tbody>

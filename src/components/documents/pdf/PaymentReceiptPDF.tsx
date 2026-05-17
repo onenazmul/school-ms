@@ -175,6 +175,44 @@ const S = StyleSheet.create({
     fontSize: 7,
     color: MUTED_COLOR,
   },
+  // ── Status banner ──────────────────────────────────────────────────────────
+  statusBannerVerified: {
+    marginBottom: 12,
+    backgroundColor: "#F0FDF4",
+    border: "1pt solid #86EFAC",
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statusBannerPending: {
+    marginBottom: 12,
+    backgroundColor: "#FFFBEB",
+    border: "1pt solid #FCD34D",
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  statusBannerTextVerified: {
+    fontSize: 8,
+    fontFamily: FONT_BOLD,
+    color: "#15803D",
+  },
+  statusBannerTextPending: {
+    fontSize: 8,
+    fontFamily: FONT_BOLD,
+    color: "#B45309",
+  },
+  statusBannerSub: {
+    fontSize: 7,
+    color: "#6B7280",
+    marginTop: 1,
+  },
   // ── Notice ─────────────────────────────────────────────────────────────────
   notice: {
     marginTop: 14,
@@ -207,6 +245,7 @@ export type ReceiptData = {
   amountPaid: number;
   balanceDue: number;
   submissions: ReceiptSubmissionItem[];
+  status?: string;
   verifiedBy?: string;
   verifiedAt?: string;
   schoolInfo: { name: string; address: string; phone: string; email: string };
@@ -225,7 +264,8 @@ function fmtMethod(m: string) {
 }
 
 export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
-  const verifiedSubs = data.submissions.filter((s) => s.status === "verified");
+  const isVerified = data.status === "verified";
+  const isPending  = data.status === "pending" || data.status === "under_review";
   const { schoolInfo } = data;
 
   return (
@@ -244,6 +284,30 @@ export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
             <Text style={S.receiptMeta}>Date: {fmtDate(data.receiptDate)}</Text>
           </View>
         </View>
+
+        {/* Status banner */}
+        {isVerified && (
+          <View style={S.statusBannerVerified}>
+            <View>
+              <Text style={S.statusBannerTextVerified}>✓  PAYMENT VERIFIED</Text>
+              {data.verifiedAt && (
+                <Text style={S.statusBannerSub}>
+                  Verified on {fmtDate(data.verifiedAt)}{data.verifiedBy ? `  ·  By ${data.verifiedBy}` : ""}
+                </Text>
+              )}
+            </View>
+          </View>
+        )}
+        {isPending && (
+          <View style={S.statusBannerPending}>
+            <View>
+              <Text style={S.statusBannerTextPending}>⏳  PAYMENT UNDER REVIEW</Text>
+              <Text style={S.statusBannerSub}>
+                Payment proof submitted. This is a provisional receipt pending admin verification.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Received from */}
         <Text style={S.sectionLabel}>RECEIVED FROM</Text>
@@ -307,13 +371,13 @@ export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
           <Text style={[S.tableHeaderText, S.colDate as any]}>Date</Text>
         </View>
 
-        {verifiedSubs.map((sub, i) => (
+        {data.submissions.map((sub, i) => (
           <View key={sub.id} style={[S.tableRow, i % 2 === 1 ? S.tableRowAlt : {}]}>
             <Text style={[S.tableCell, S.colNo as any]}>{i + 1}</Text>
             <Text style={[S.tableCell, S.colMethod as any]}>{fmtMethod(sub.method)}</Text>
             <Text style={[S.tableCell, S.colTrxId as any]}>{sub.transactionId}</Text>
             <Text style={[S.tableCell, S.colPhone as any]}>{sub.phoneNumber || "—"}</Text>
-            <Text style={[S.tableCell, S.colAmount as any]}>৳{sub.amountSent.toLocaleString("en-IN")}</Text>
+            <Text style={[S.tableCell, S.colAmount as any]}>BDT {sub.amountSent.toLocaleString("en-IN")}</Text>
             <Text style={[S.tableCell, S.colDate as any]}>{fmtDate(sub.paymentDate)}</Text>
           </View>
         ))}
@@ -322,33 +386,30 @@ export function PaymentReceiptPDF({ data }: { data: ReceiptData }) {
         <View style={S.summaryBox}>
           <View style={S.summaryItem}>
             <Text style={S.summaryLabel}>Total Fee</Text>
-            <Text style={S.summaryValue}>৳{data.totalFee.toLocaleString("en-IN")}</Text>
+            <Text style={S.summaryValue}>BDT {data.totalFee.toLocaleString("en-IN")}</Text>
           </View>
           <View style={S.summaryItem}>
             <Text style={S.summaryLabel}>Amount Paid</Text>
-            <Text style={S.summaryValueGreen}>৳{data.amountPaid.toLocaleString("en-IN")}</Text>
+            <Text style={S.summaryValueGreen}>BDT {data.amountPaid.toLocaleString("en-IN")}</Text>
           </View>
           <View style={S.summaryItem}>
             <Text style={S.summaryLabel}>Balance Due</Text>
             <Text style={[S.summaryValue, { color: data.balanceDue > 0 ? "#DC2626" : TEXT_COLOR }]}>
-              ৳{data.balanceDue.toLocaleString("en-IN")}
+              BDT {data.balanceDue.toLocaleString("en-IN")}
             </Text>
           </View>
         </View>
 
         <View style={S.divider} />
 
-        {/* Verification */}
+        {/* Signature */}
         <View style={S.verifiedBox}>
           <View>
-            {data.verifiedBy && (
-              <Text style={S.verifiedLeft}>Verified By: {data.verifiedBy}</Text>
-            )}
-            {data.verifiedAt && (
-              <Text style={S.verifiedLeft}>
-                Verified On: {fmtDate(data.verifiedAt)}
-              </Text>
-            )}
+            <Text style={S.verifiedLeft}>
+              {isPending
+                ? "This provisional receipt is subject to admin verification."
+                : "This receipt is computer-generated and valid without a physical signature."}
+            </Text>
           </View>
           <View style={S.sigBox}>
             <View style={S.sigLine} />

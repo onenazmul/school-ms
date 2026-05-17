@@ -38,13 +38,14 @@ function ApplyLoginForm() {
     const { error } = await authClient.signIn.username({
       username: values.username,
       password: values.password,
-      callbackURL: callbackUrl,
       fetchOptions: { onError: () => setLoading(false) },
     });
     if (error) {
       toast.error(error.message ?? "Sign in failed. Please try again.");
       setLoading(false);
+      return;
     }
+    router.push(callbackUrl);
   }
 
   return (

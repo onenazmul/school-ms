@@ -12,13 +12,25 @@ function fmtDate(d: Date | null | undefined) {
   return d.toISOString().split("T")[0];
 }
 
+function calcGPA(obtained: number, total: number): number {
+  if (total === 0) return 0;
+  const pct = (obtained / total) * 100;
+  if (pct >= 80) return 5.0;
+  if (pct >= 70) return 4.0;
+  if (pct >= 60) return 3.5;
+  if (pct >= 50) return 3.0;
+  if (pct >= 40) return 2.0;
+  if (pct >= 33) return 1.0;
+  return 0.0;
+}
+
 export async function POST(req: Request) {
   const session = await getSession();
   if (!session) return new Response(JSON.stringify({ error: "Unauthenticated" }), { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { class_name, section, academic_year } = body as {
-    class_name?: string; section?: string; academic_year?: string;
+  const { class_name, section, academic_year, exam_id } = body as {
+    class_name?: string; section?: string; academic_year?: string; exam_id?: string;
   };
 
   const where: Record<string, unknown> = { status: "Active" };
@@ -33,7 +45,7 @@ export async function POST(req: Request) {
         admission: true,
         user: { select: { username: true } },
         results: {
-          where: { publishedAt: { not: null } },
+          where: { publishedAt: { not: null }, ...(exam_id ? { examId: exam_id } : {}) },
           orderBy: { publishedAt: "desc" },
           take: 1,
         },
@@ -73,8 +85,7 @@ export async function POST(req: Request) {
         subject_code:   s.subject_code ? String(s.subject_code) : null,
         max_marks:      Number(s.fullMarks ?? s.max_marks ?? 0),
         obtained_marks: Number(s.obtainedMarks ?? s.obtained_marks ?? 0),
-        grade:          String(s.grade ?? ""),
-        remarks:        String(s.remarks ?? ""),
+        remarks:        s.remarks ? String(s.remarks) : undefined,
       }));
       const totalObtained = subjects.reduce((a, s) => a + s.obtained_marks, 0);
       const totalMax = subjects.reduce((a, s) => a + s.max_marks, 0);
@@ -98,13 +109,12 @@ export async function POST(req: Request) {
         subjects,
         total_obtained:     Number(examResult.totalMarks) || totalObtained,
         total_max:          totalMax,
-        percentage:         totalMax > 0 ? Math.round((totalObtained / totalMax) * 1000) / 10 : 0,
-        overall_grade:      examResult.grade ?? "—",
-        position:           examResult.position ?? 0,
-        total_students:     (examResult as any).totalStudents ?? 0,
-        attendance_present: (examResult as any).attendancePresent ?? 0,
-        attendance_total:   (examResult as any).attendanceTotal ?? 0,
-        pass:               (examResult as any).pass ?? true,
+        gpa:                calcGPA(totalObtained, totalMax),
+        position:           examResult.position ?? null,
+        total_students:     (examResult as any).totalStudents ?? null,
+        attendance_present: (examResult as any).attendancePresent ?? null,
+        attendance_total:   (examResult as any).attendanceTotal ?? null,
+        pass:               (examResult as any).pass ?? null,
         teacher_remarks:    (examResult as any).teacherRemarks ?? "",
       };
 

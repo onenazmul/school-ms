@@ -12,14 +12,11 @@ import { Separator } from "@/components/ui/separator";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, School, Calendar, MessageSquare, Shield, BookMarked, Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { Loader2, School, Calendar, MessageSquare, Shield, BookMarked, Plus, Pencil, Trash2, Check, X, BookOpen } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
 const schoolSchema = z.object({
@@ -35,31 +32,35 @@ const schoolSchema = z.object({
 type SchoolInput = z.infer<typeof schoolSchema>;
 
 const academicSchema = z.object({
-  academicYear: z.string().min(1),
-  sessionStart: z.string().min(1),
-  sessionEnd:   z.string().min(1),
-  gradingSystem:z.enum(["gpa","percentage","grade_letter"]),
-  workingDays:  z.array(z.string()).min(1),
+  academicYear:  z.string().min(1, "Required"),
+  sessionStart:  z.string().min(1, "Required"),
+  sessionEnd:    z.string().min(1, "Required"),
 });
 type AcademicInput = z.infer<typeof academicSchema>;
 
 const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-type SectionKey = "school" | "academic" | "subjects" | "sms" | "security";
+type SectionKey = "school" | "academic" | "subjects" | "admitcard" | "sms" | "security";
 
 const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
-  { key: "school",   label: "School Info",      icon: School },
-  { key: "academic", label: "Academic Settings", icon: Calendar },
-  { key: "subjects", label: "Subjects",          icon: BookMarked },
-  { key: "sms",      label: "SMS Settings",      icon: MessageSquare },
-  { key: "security", label: "Security",          icon: Shield },
+  { key: "school",    label: "School Info",      icon: School },
+  { key: "academic",  label: "Academic Settings", icon: Calendar },
+  { key: "subjects",  label: "Subjects",          icon: BookMarked },
+  { key: "admitcard", label: "Admit Card",         icon: BookOpen },
+  { key: "sms",       label: "SMS Settings",       icon: MessageSquare },
+  { key: "security",  label: "Security",           icon: Shield },
 ];
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionKey>("school");
   const [savingAcademic, setSavingAcademic] = useState(false);
   const [workingDays, setWorkingDays] = useState(["Sunday","Monday","Tuesday","Wednesday","Thursday"]);
-  const [workingDaysSeeded, setWorkingDaysSeeded] = useState(false);
+  const [admitRules, setAdmitRules] = useState<string[]>([]);
+  const [admitRulesSeeded, setAdmitRulesSeeded] = useState(false);
+  const [savingAdmitRules, setSavingAdmitRules] = useState(false);
+  const [newRule, setNewRule] = useState("");
+  const [editRuleIdx, setEditRuleIdx] = useState<number | null>(null);
+  const [editRuleText, setEditRuleText] = useState("");
 
   // ── School info from DB ──────────────────────────────────────────────────
   const { data: settingData, isLoading: settingLoading } = useQuery<{ setting: SchoolInput & { id: number } }>({
@@ -87,15 +88,6 @@ export default function SettingsPage() {
     setFormSeeded(true);
   }
 
-  // Seed working days from DB off-days
-  if (settingData?.setting && !workingDaysSeeded) {
-    const offDays: string[] = (settingData.setting as any).weekly_off_days ?? [];
-    if (offDays.length > 0) {
-      setWorkingDays(WEEKDAYS.filter((d) => !offDays.includes(d)));
-    }
-    setWorkingDaysSeeded(true);
-  }
-
   const saveMutation = useMutation({
     mutationFn: (body: SchoolInput) =>
       fetch("/api/v1/admin/settings", {
@@ -110,11 +102,48 @@ export default function SettingsPage() {
   const academicForm = useForm<AcademicInput>({
     resolver: zodResolver(academicSchema),
     defaultValues: {
-      academicYear: (settingData?.setting as any)?.academic_year ?? "",
-      sessionStart: "2025-01-01", sessionEnd: "2025-12-31",
-      gradingSystem: "gpa", workingDays: ["Sunday","Monday","Tuesday","Wednesday","Thursday"],
+      academicYear: "", sessionStart: "", sessionEnd: "",
     },
   });
+
+  // Seed academic form once settings load
+  const [academicSeeded, setAcademicSeeded] = useState(false);
+  if (settingData?.setting && !academicSeeded) {
+    const s = settingData.setting as any;
+    academicForm.reset({
+      academicYear:  s.academic_year  ?? "",
+      sessionStart:  s.session_start  ?? "",
+      sessionEnd:    s.session_end    ?? "",
+    });
+    if (s.weekly_off_days?.length > 0) {
+      setWorkingDays(WEEKDAYS.filter((d) => !(s.weekly_off_days as string[]).includes(d)));
+    }
+    setAcademicSeeded(true);
+  }
+
+  // Seed admit card rules once settings load
+  if (settingData?.setting && !admitRulesSeeded) {
+    const s = settingData.setting as any;
+    if (Array.isArray(s.admit_card_rules)) setAdmitRules(s.admit_card_rules);
+    setAdmitRulesSeeded(true);
+  }
+
+  async function saveAdmitRules(rules: string[]) {
+    setSavingAdmitRules(true);
+    try {
+      const r = await fetch("/api/v1/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ admit_card_rules: rules }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message);
+      toast.success("Admit card rules saved");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save");
+    } finally {
+      setSavingAdmitRules(false);
+    }
+  }
 
   async function saveAcademic(values: AcademicInput) {
     setSavingAcademic(true);
@@ -123,7 +152,12 @@ export default function SettingsPage() {
       const r = await fetch("/api/v1/admin/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ academic_year: values.academicYear, weekly_off_days: offDays }),
+        body: JSON.stringify({
+          academic_year:  values.academicYear,
+          session_start:  values.sessionStart,
+          session_end:    values.sessionEnd,
+          weekly_off_days: offDays,
+        }),
       });
       if (!r.ok) throw new Error((await r.json()).message);
       toast.success("Academic settings saved");
@@ -246,17 +280,6 @@ export default function SettingsPage() {
                           <FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
                       )} />
                     </div>
-                    <FormField control={academicForm.control} name="gradingSystem" render={({ field }) => (
-                      <FormItem><FormLabel>Grading System</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                          <SelectContent>
-                            <SelectItem value="gpa">GPA (5.0 Scale)</SelectItem>
-                            <SelectItem value="percentage">Percentage</SelectItem>
-                            <SelectItem value="grade_letter">Grade Letter</SelectItem>
-                          </SelectContent>
-                        </Select></FormItem>
-                    )} />
                     <div>
                       <p className="text-sm font-medium mb-2">Working Days</p>
                       <div className="flex flex-wrap gap-2">
@@ -285,6 +308,120 @@ export default function SettingsPage() {
           )}
 
           {activeSection === "subjects" && <SubjectsSettings />}
+
+          {activeSection === "admitcard" && (
+            <Card>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-sm">Admit Card Rules &amp; Instructions</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  These instructions appear at the bottom of every admit card. Leave empty to use exam-level instructions.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Add rule */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add a new rule or instruction…"
+                    value={newRule}
+                    onChange={(e) => setNewRule(e.target.value)}
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && newRule.trim()) {
+                        const updated = [...admitRules, newRule.trim()];
+                        setAdmitRules(updated);
+                        setNewRule("");
+                      }
+                    }}
+                  />
+                  <Button
+                    className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+                    disabled={!newRule.trim()}
+                    onClick={() => {
+                      const updated = [...admitRules, newRule.trim()];
+                      setAdmitRules(updated);
+                      setNewRule("");
+                    }}
+                  >
+                    <Plus className="size-4" />Add
+                  </Button>
+                </div>
+
+                {/* Rules list */}
+                {admitRules.length === 0 ? (
+                  <div className="rounded-xl border py-8 text-center text-sm text-muted-foreground">
+                    No rules added yet. Add your first rule above.
+                  </div>
+                ) : (
+                  <div className="rounded-xl border divide-y overflow-hidden">
+                    {admitRules.map((rule, idx) => (
+                      <div key={idx} className="flex items-start gap-2 px-4 py-3 bg-background hover:bg-muted/20">
+                        <span className="text-xs text-muted-foreground font-mono mt-1 w-5 shrink-0">{idx + 1}.</span>
+                        {editRuleIdx === idx ? (
+                          <div className="flex flex-1 gap-2">
+                            <Input
+                              className="flex-1 h-8 text-sm"
+                              value={editRuleText}
+                              onChange={(e) => setEditRuleText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && editRuleText.trim()) {
+                                  const updated = admitRules.map((r, i) => i === idx ? editRuleText.trim() : r);
+                                  setAdmitRules(updated);
+                                  setEditRuleIdx(null);
+                                }
+                                if (e.key === "Escape") setEditRuleIdx(null);
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => {
+                                if (editRuleText.trim()) {
+                                  const updated = admitRules.map((r, i) => i === idx ? editRuleText.trim() : r);
+                                  setAdmitRules(updated);
+                                }
+                                setEditRuleIdx(null);
+                              }}
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <Check className="size-4" />
+                            </button>
+                            <button onClick={() => setEditRuleIdx(null)} className="text-muted-foreground hover:text-foreground">
+                              <X className="size-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-1 items-start justify-between gap-2">
+                            <p className="text-sm flex-1">{rule}</p>
+                            <div className="flex gap-1 shrink-0">
+                              <button
+                                onClick={() => { setEditRuleIdx(idx); setEditRuleText(rule); }}
+                                className="text-muted-foreground hover:text-indigo-600 p-1"
+                              >
+                                <Pencil className="size-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setAdmitRules(admitRules.filter((_, i) => i !== idx))}
+                                className="text-muted-foreground hover:text-red-600 p-1"
+                              >
+                                <Trash2 className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  onClick={() => saveAdmitRules(admitRules)}
+                  disabled={savingAdmitRules}
+                >
+                  {savingAdmitRules && <Loader2 className="size-4 mr-2 animate-spin" />}
+                  Save Rules
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {activeSection === "sms" && <SmsSettings />}
 

@@ -33,13 +33,14 @@ function LoginForm() {
     const { error } = await signIn.email({
       email: values.email,
       password: values.password,
-      callbackURL: callbackUrl || "/admin/dashboard",
       fetchOptions: { onError: () => setLoading(false) },
     });
     if (error) {
       toast.error(error.message ?? "Login failed");
       setLoading(false);
+      return;
     }
+    router.push(callbackUrl || "/admin/dashboard");
   }
 
   return (

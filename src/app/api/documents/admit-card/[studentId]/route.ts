@@ -27,6 +27,8 @@ export async function GET(
   if (!session) return new Response(JSON.stringify({ error: "Unauthenticated" }), { status: 401 });
 
   const { studentId } = await params;
+  const url = new URL(req.url);
+  const examId = url.searchParams.get("examId") ?? "";
 
   const [student, schoolSetting] = await Promise.all([
     db.student.findUnique({
@@ -47,22 +49,31 @@ export async function GET(
     });
   }
 
-  // Find published exam for this student's class
-  const exam = await db.exam.findFirst({
-    where: {
-      status: "published",
-      OR: [{ className: null }, { className: student.className }],
-    },
-    orderBy: { startDate: "desc" },
-    include: { schedule: { orderBy: { sortOrder: "asc" } } },
-  });
+  // Find exam: specific by ID if provided, otherwise most recent published for student's class
+  const exam = examId
+    ? await db.exam.findUnique({
+        where: { id: examId },
+        include: { schedule: { orderBy: { sortOrder: "asc" } } },
+      })
+    : await db.exam.findFirst({
+        where: {
+          status: "published",
+          OR: [{ className: null }, { className: student.className }],
+        },
+        orderBy: { startDate: "desc" },
+        include: { schedule: { orderBy: { sortOrder: "asc" } } },
+      });
 
   if (!exam) {
-    return new Response(JSON.stringify({ error: "No published exam found for this student's class" }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: examId ? "Exam not found" : "No published exam found for this student's class" }),
+      { status: 404, headers: { "Content-Type": "application/json" } }
+    );
   }
+
+  const dbRules = schoolSetting?.admitCardRules
+    ? (JSON.parse(schoolSetting.admitCardRules) as string[])
+    : [];
 
   const schoolInfo = {
     name: schoolSetting?.name ?? "School Name",
@@ -81,17 +92,22 @@ export async function GET(
     photo,
   };
 
+  // For per-class exams, filter to this student's class (or entries with no class = shared)
+  const filteredSchedule = exam.schedule.filter(
+    (s) => s.className === "" || s.className === student.className
+  );
+
   const examCard = {
     exam_name: exam.name,
     academic_year: exam.academicYear,
-    schedule: exam.schedule.map((s) => ({
+    schedule: filteredSchedule.map((s) => ({
       subject: s.subject,
       date: s.examDate.toISOString().split("T")[0],
       day: s.examDate.toLocaleDateString("en-US", { weekday: "long" }),
       time: `${s.startTime} – ${s.endTime}`,
       room: s.room ?? "—",
     })),
-    instructions: (exam.instructions as string[] | null) ?? DEFAULT_INSTRUCTIONS,
+    instructions: dbRules.length > 0 ? dbRules : ((exam.instructions as string[] | null) ?? DEFAULT_INSTRUCTIONS),
   };
 
   const element = createElement(AdmitCardPDF, { student: cardStudent, examCard, schoolInfo });

@@ -38,8 +38,8 @@ export async function GET() {
           admissionConfig: { include: { classConfigs: true } },
           mark: true,
           paymentSubmissions: {
-            where: { status: "verified" },
-            orderBy: { verifiedAt: "desc" },
+            where: { status: { in: ["verified", "pending", "under_review"] } },
+            orderBy: { submittedAt: "desc" },
           },
         },
       });
@@ -49,9 +49,17 @@ export async function GET() {
 
     if (!admission) return NextResponse.json({ message: "Admission not found" }, { status: 404 });
 
-    const allVerified = (admission as any).paymentSubmissions ?? [];
-    const verifiedPayment = allVerified.find((ps: any) => ps.paymentContext === "admission") ?? allVerified[0] ?? null;
-    const verifiedEnrollmentPayment = allVerified.find((ps: any) => ps.paymentContext === "enrollment") ?? null;
+    const allSubmissions = (admission as any).paymentSubmissions ?? [];
+    // Prefer verified, then under_review, then pending
+    const rankStatus = (s: string) => s === "verified" ? 0 : s === "under_review" ? 1 : 2;
+    const admissionSubs = allSubmissions
+      .filter((ps: any) => ps.paymentContext === "admission")
+      .sort((a: any, b: any) => rankStatus(a.status) - rankStatus(b.status));
+    const enrollmentSubs = allSubmissions
+      .filter((ps: any) => ps.paymentContext === "enrollment")
+      .sort((a: any, b: any) => rankStatus(a.status) - rankStatus(b.status));
+    const verifiedPayment = admissionSubs[0] ?? null;
+    const verifiedEnrollmentPayment = enrollmentSubs[0] ?? null;
     const cfg = (admission as any).admissionConfig ?? null;
     const classOverride = cfg?.classConfigs?.find((c: any) => c.className === admission!.className) ?? null;
     const mark = (admission as any).mark ?? null;
@@ -95,6 +103,8 @@ export async function GET() {
           : null,
         payment_submission: verifiedPayment
           ? {
+              id:                   verifiedPayment.id,
+              status:               verifiedPayment.status,
               method:               verifiedPayment.method,
               transaction_id:       verifiedPayment.transactionId,
               phone_number:         verifiedPayment.phoneNumber ?? null,
@@ -114,6 +124,8 @@ export async function GET() {
           : null,
         enrollment_payment_submission: verifiedEnrollmentPayment
           ? {
+              id:                   verifiedEnrollmentPayment.id,
+              status:               verifiedEnrollmentPayment.status,
               method:               verifiedEnrollmentPayment.method,
               transaction_id:       verifiedEnrollmentPayment.transactionId,
               phone_number:         verifiedEnrollmentPayment.phoneNumber ?? null,

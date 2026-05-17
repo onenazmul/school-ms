@@ -46,9 +46,11 @@ function AdmissionNav({ pathname }: { pathname: string }) {
 
 export function AdmissionShell({
   session,
+  isEnrolled = false,
   children,
 }: {
   session: SessionUser;
+  isEnrolled?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -86,14 +88,16 @@ export function AdmissionShell({
         {/* Nav */}
         <div className="flex-1 hidden sm:flex items-center gap-1">
           <AdmissionNav pathname={pathname} />
-          <a
-            href="/student/dashboard"
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors ml-1"
-          >
-            <GraduationCap className="size-3.5 shrink-0" />
-            Student Panel
-            <ExternalLink className="size-3 opacity-60" />
-          </a>
+          {isEnrolled && (
+            <a
+              href="/student/dashboard"
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors ml-1"
+            >
+              <GraduationCap className="size-3.5 shrink-0" />
+              Student Panel
+              <ExternalLink className="size-3 opacity-60" />
+            </a>
+          )}
         </div>
 
         {/* User */}
@@ -141,13 +145,15 @@ export function AdmissionShell({
               </Link>
             );
           })}
-          <a
-            href="/student/dashboard"
-            className="flex flex-1 flex-col items-center justify-center gap-1 py-3 text-[10px] font-medium text-indigo-600 transition-colors"
-          >
-            <GraduationCap className="size-5" />
-            Student
-          </a>
+          {isEnrolled && (
+            <a
+              href="/student/dashboard"
+              className="flex flex-1 flex-col items-center justify-center gap-1 py-3 text-[10px] font-medium text-indigo-600 transition-colors"
+            >
+              <GraduationCap className="size-5" />
+              Student
+            </a>
+          )}
         </div>
       </nav>
     </div>

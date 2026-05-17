@@ -6,20 +6,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, DollarSign, Receipt, UserCircle, CreditCard, MoreHorizontal,
+  LayoutDashboard, DollarSign, Receipt, UserCircle, CreditCard, MoreHorizontal, FileText,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const PINNED = [
   { label: "Home",     href: "/student/dashboard", icon: LayoutDashboard },
+  { label: "Results",  href: "/student/results",   icon: FileText        },
   { label: "Ledger",   href: "/student/ledger",    icon: DollarSign      },
-  { label: "Receipts", href: "/student/receipts",  icon: Receipt         },
   { label: "Profile",  href: "/student/profile",   icon: UserCircle      },
 ];
 
-// Grows as new student features are added (results, exams, attendance, etc.)
 const MORE = [
-  { label: "Payments", href: "/student/payments", icon: CreditCard },
+  { label: "Receipts", href: "/student/receipts",  icon: Receipt   },
+  { label: "Payments", href: "/student/payments",  icon: CreditCard },
 ];
 
 export function StudentMobileNav() {

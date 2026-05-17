@@ -400,7 +400,11 @@ model SchoolSetting {
   eiin          String @default("")
   established   String @default("")
   academicYear  String @default("")
-  weeklyOffDays String @default("[]")
+  sessionStart  String @default("")
+  sessionEnd    String @default("")
+  gradingSystem   String @default("gpa")
+  weeklyOffDays   String @default("[]")
+  admitCardRules  String @default("[]")
 }
 
 model SmsConfig {
