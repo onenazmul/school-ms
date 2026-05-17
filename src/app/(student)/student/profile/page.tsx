@@ -7,7 +7,7 @@ import { authClient } from "@/lib/auth/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,11 +32,18 @@ const pwSchema = z.object({
   path: ["confirmPassword"],
 });
 
+function resolvePhotoUrl(p: string | null | undefined): string | null {
+  if (!p) return null;
+  if (p.startsWith("http")) return p;
+  return `/api/v1/uploads/${p}`;
+}
+
 type StudentProfile = {
   name_en: string;
   name_bn: string | null;
   email: string | null;
   username: string | null;
+  photo: string | null;
   class_name: string;
   section: string | null;
   roll_number: string | null;
@@ -164,6 +171,9 @@ export default function StudentProfilePage() {
         <CardContent className="pt-6">
           <div className="flex items-start gap-5 flex-wrap">
             <Avatar className="size-16">
+              {resolvePhotoUrl(profile.photo) && (
+                <AvatarImage src={resolvePhotoUrl(profile.photo)!} alt={profile.name_en} />
+              )}
               <AvatarFallback className="text-xl font-semibold bg-indigo-50 text-indigo-700">
                 {initials}
               </AvatarFallback>

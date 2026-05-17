@@ -637,7 +637,7 @@ export default function PaymentSubmissionsPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 text-xs gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-7 text-xs gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity"
                               onClick={() => { setReviewSub(s); setReviewOpen(true); }}
                             >
                               <Eye className="size-3" />Review

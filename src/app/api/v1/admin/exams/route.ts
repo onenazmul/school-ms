@@ -50,16 +50,17 @@ export async function POST(req: Request) {
   if (!name) return NextResponse.json({ message: "name is required" }, { status: 422 });
   if (!academicYear) return NextResponse.json({ message: "academic_year is required" }, { status: 422 });
 
+  const scheduleMode = body.schedule_mode === "per_class" ? "per_class" : "shared";
+
   const exam = await db.exam.create({
     data: {
       id: createId(),
       name,
       academicYear,
       className: body.class_name ? String(body.class_name) : null,
-      startDate: body.start_date ? new Date(String(body.start_date)) : null,
-      endDate: body.end_date ? new Date(String(body.end_date)) : null,
+      scheduleMode,
       status: "draft",
-      instructions: Array.isArray(body.instructions) ? body.instructions : undefined,
+      instructions: Array.isArray(body.instructions) ? JSON.stringify(body.instructions) : undefined,
     },
   });
 

@@ -5,6 +5,7 @@ import { AdmitCardPDF } from "@/components/documents/pdf/AdmitCardPDF";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { createElement } from "react";
+import { photoToDataUri } from "@/lib/documents/photo-utils";
 
 const DEFAULT_INSTRUCTIONS = [
   "Bring this admit card to the examination hall. Entry will not be permitted without it.",
@@ -93,7 +94,8 @@ export async function POST(req: Request) {
     archive.on("end", () => resolve(Buffer.concat(chunks)));
     archive.on("error", reject);
 
-    const pdfPromises = students.map((student) => {
+    const pdfPromises = students.map(async (student) => {
+      const photo = await photoToDataUri(student.admission?.studentPhoto);
       const cardStudent = {
         id: student.id,
         username: student.user?.username ?? student.id,
@@ -103,11 +105,11 @@ export async function POST(req: Request) {
         roll_number: student.rollNumber ?? null,
         gender: student.admission?.gender ?? null,
         dob: fmtDate(student.admission?.dob),
+        photo,
       };
       const element = createElement(AdmitCardPDF, { student: cardStudent, examCard, schoolInfo });
-      return renderToBuffer(element as any).then((buf) => {
-        archive.append(buf, { name: `admit-card-${cardStudent.username}.pdf` });
-      });
+      const buf = await renderToBuffer(element as any);
+      archive.append(buf, { name: `admit-card-${cardStudent.username}.pdf` });
     });
 
     Promise.all(pdfPromises).then(() => archive.finalize()).catch(reject);

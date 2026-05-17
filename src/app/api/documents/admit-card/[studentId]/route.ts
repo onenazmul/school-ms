@@ -4,6 +4,7 @@ import { AdmitCardPDF } from "@/components/documents/pdf/AdmitCardPDF";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { createElement } from "react";
+import { photoToDataUri } from "@/lib/documents/photo-utils";
 
 const DEFAULT_INSTRUCTIONS = [
   "Bring this admit card to the examination hall. Entry will not be permitted without it.",
@@ -37,6 +38,7 @@ export async function GET(
     }),
     db.schoolSetting.findUnique({ where: { id: 1 } }),
   ]);
+  const photo = await photoToDataUri(student?.admission?.studentPhoto);
 
   if (!student) {
     return new Response(JSON.stringify({ error: "Student not found" }), {
@@ -76,6 +78,7 @@ export async function GET(
     roll_number: student.rollNumber ?? null,
     gender: student.admission?.gender ?? null,
     dob: fmtDate(student.admission?.dob),
+    photo,
   };
 
   const examCard = {

@@ -27,7 +27,7 @@ export function logActivity(entry: ActivityEntry): void {
       actorRole: entry.actorRole ?? "system",
       description: entry.description,
       metadata: entry.metadata
-        ? (entry.metadata as Prisma.InputJsonValue)
+        ? JSON.stringify(entry.metadata)
         : undefined,
     },
   }).catch(() => {});

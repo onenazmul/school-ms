@@ -31,6 +31,7 @@ interface FeeConfig {
   due_day: number | null;
   due_date: string | null;
   is_active: boolean;
+  allow_bulk: boolean;
 }
 
 interface SchoolClass { id: number; name: string; isActive: boolean }
@@ -71,7 +72,7 @@ export default function BulkBillingPage() {
     queryKey: ["fee-configs"],
     queryFn: () => fetch("/api/v1/admin/fee-configs").then((r) => r.json()),
   });
-  const fees = (feesData?.fees ?? []).filter((f) => f.is_active);
+  const fees = (feesData?.fees ?? []).filter((f) => f.is_active && f.allow_bulk);
 
   // Load classes
   const { data: classesData } = useQuery<{ classes: SchoolClass[] }>({
@@ -233,7 +234,7 @@ export default function BulkBillingPage() {
                       </FormControl>
                       <SelectContent>
                         {fees.length === 0
-                          ? <SelectItem value="none" disabled>No active fee configs</SelectItem>
+                          ? <SelectItem value="none" disabled>No bulk-eligible fee configs</SelectItem>
                           : fees.map((f) => (
                             <SelectItem key={f.id} value={f.id}>
                               {f.name} — ৳{f.amount.toLocaleString()} ({TYPE_LABELS[f.type]})

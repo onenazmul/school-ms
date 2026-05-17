@@ -5,6 +5,7 @@ import { ResultCardPDF } from "@/components/documents/pdf/ResultCardPDF";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { createElement } from "react";
+import { photoToDataUri } from "@/lib/documents/photo-utils";
 
 function fmtDate(d: Date | null | undefined) {
   if (!d) return null;
@@ -63,11 +64,13 @@ export async function POST(req: Request) {
     archive.on("end", () => resolve(Buffer.concat(chunks)));
     archive.on("error", reject);
 
-    const pdfPromises = studentsWithResults.map((student) => {
+    const pdfPromises = studentsWithResults.map(async (student) => {
+      const photo = await photoToDataUri(student.admission?.studentPhoto);
       const examResult = student.results[0];
-      const rawSubjects = (examResult.subjects as any[]) ?? [];
+      const rawSubjects = (JSON.parse(examResult.subjects as string) as any[]) ?? [];
       const subjects = rawSubjects.map((s: any) => ({
         subject:        String(s.subject ?? ""),
+        subject_code:   s.subject_code ? String(s.subject_code) : null,
         max_marks:      Number(s.fullMarks ?? s.max_marks ?? 0),
         obtained_marks: Number(s.obtainedMarks ?? s.obtained_marks ?? 0),
         grade:          String(s.grade ?? ""),
@@ -86,6 +89,7 @@ export async function POST(req: Request) {
         gender: student.admission?.gender ?? null,
         dob: fmtDate(student.admission?.dob),
         guardian_name: student.admission?.guardianName ?? null,
+        photo,
       };
 
       const result = {
@@ -105,9 +109,8 @@ export async function POST(req: Request) {
       };
 
       const element = createElement(ResultCardPDF, { student: cardStudent, result, schoolInfo });
-      return renderToBuffer(element as any).then((buf) => {
-        archive.append(buf, { name: `result-card-${cardStudent.username}.pdf` });
-      });
+      const buf = await renderToBuffer(element as any);
+      archive.append(buf, { name: `result-card-${cardStudent.username}.pdf` });
     });
 
     Promise.all(pdfPromises).then(() => archive.finalize()).catch(reject);

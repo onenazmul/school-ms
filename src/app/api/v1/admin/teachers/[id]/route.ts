@@ -12,7 +12,7 @@ function serialize(t: {
     id: t.id, name: t.name, email: t.email, phone: t.phone,
     subject: t.subject, designation: t.designation, qualification: t.qualification,
     joining_date: t.joiningDate ? t.joiningDate.toISOString().split("T")[0] : null,
-    classes: Array.isArray(t.classes) ? t.classes as string[] : [],
+    classes: t.classes ? JSON.parse(t.classes as string) as string[] : [],
     status: t.status,
   };
 }
@@ -37,7 +37,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.designation !== undefined) data.designation = String(body.designation);
   if (body.qualification !== undefined) data.qualification = body.qualification ? String(body.qualification) : null;
   if (body.joining_date !== undefined) data.joiningDate = body.joining_date ? new Date(String(body.joining_date)) : null;
-  if (body.classes !== undefined) data.classes = Array.isArray(body.classes) ? body.classes : [];
+  if (body.classes !== undefined) data.classes = JSON.stringify(Array.isArray(body.classes) ? body.classes : []);
   if (body.status !== undefined) data.status = String(body.status);
 
   try {

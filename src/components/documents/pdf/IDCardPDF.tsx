@@ -1,6 +1,6 @@
 // components/documents/pdf/IDCardPDF.tsx
 import {
-  Document, Page, View, Text, StyleSheet,
+  Document, Page, View, Text, StyleSheet, Image,
 } from "@react-pdf/renderer";
 
 const BRAND = "#4F46E5";
@@ -136,6 +136,7 @@ export type IDCardStudent = {
   blood_group: string | null;
   guardian_name: string | null;
   guardian_phone: string | null;
+  photo?: string | null;
 };
 
 export type SchoolInfo = {
@@ -160,8 +161,11 @@ export function IDCardPDF({ student, schoolInfo }: Props) {
         <View style={styles.body}>
           {/* Photo */}
           <View style={styles.photoBox}>
-            <Text style={[styles.photoLabel, { fontSize: 6 }]}>📷</Text>
-            <Text style={styles.photoLabel}>PHOTO</Text>
+            {student.photo ? (
+              <Image src={student.photo} style={{ width: 46, height: 58, objectFit: "cover", borderRadius: 3 }} />
+            ) : (
+              <Text style={styles.photoLabel}>PHOTO</Text>
+            )}
           </View>
 
           {/* Info */}

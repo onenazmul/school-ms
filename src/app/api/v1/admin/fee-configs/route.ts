@@ -12,6 +12,7 @@ function serialize(fee: {
   dueDate: Date | null;
   lateFee: unknown;
   isActive: boolean;
+  allowBulk: boolean;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -20,11 +21,12 @@ function serialize(fee: {
     name: fee.name,
     amount: Number(fee.amount),
     type: fee.type,
-    applicable_classes: fee.applicableClasses as string[],
+    applicable_classes: JSON.parse(fee.applicableClasses as string) as string[],
     due_day: fee.dueDay,
     due_date: fee.dueDate ? fee.dueDate.toISOString().split("T")[0] : null,
     late_fee: fee.lateFee != null ? Number(fee.lateFee) : null,
     is_active: fee.isActive,
+    allow_bulk: fee.allowBulk,
   };
 }
 
@@ -53,7 +55,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid JSON" }, { status: 400 });
     }
 
-    const { name, amount, type, applicable_classes, due_day, due_date, late_fee } = body;
+    const { name, amount, type, applicable_classes, due_day, due_date, late_fee, allow_bulk } = body;
     if (!name || !amount || !type || !Array.isArray(applicable_classes) || applicable_classes.length === 0)
       return NextResponse.json({ message: "name, amount, type, applicable_classes are required" }, { status: 422 });
 
@@ -67,11 +69,12 @@ export async function POST(req: Request) {
         name: String(name),
         amount: Number(amount),
         type: String(type),
-        applicableClasses: applicable_classes,
+        applicableClasses: JSON.stringify(applicable_classes),
         dueDay: due_day != null ? Number(due_day) : null,
         dueDate: parsedDueDate,
         lateFee: late_fee != null ? Number(late_fee) : null,
         isActive: true,
+        allowBulk: allow_bulk !== undefined ? Boolean(allow_bulk) : true,
       },
     });
     return NextResponse.json({ fee: serialize(fee) }, { status: 201 });

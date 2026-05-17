@@ -100,6 +100,7 @@ export async function GET() {
       name_en: a?.nameEn ?? user.name,
       name_bn: a?.nameBn ?? null,
       gender: a?.gender ?? null,
+      photo: a?.studentPhoto ?? null,
       dob: a?.dob?.toISOString().split("T")[0] ?? null,
       blood_group: a?.bloodGroup ?? null,
       nationality: a?.nationality ?? null,

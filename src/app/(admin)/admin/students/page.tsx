@@ -8,6 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+function resolvePhotoUrl(p: string | null | undefined): string | null {
+  if (!p) return null;
+  if (p.startsWith("http")) return p;
+  return `/api/v1/uploads/${p}`;
+}
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -401,13 +407,17 @@ export default function StudentsPage() {
                     <td className="py-2.5 px-4">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <Avatar className="size-8 shrink-0">
-                          {s.photo && <AvatarFallback className="text-xs bg-indigo-50 text-indigo-700">{initials(s.name_en)}</AvatarFallback>}
+                          {resolvePhotoUrl(s.photo) && (
+                            <AvatarImage src={resolvePhotoUrl(s.photo)!} alt={s.name_en} />
+                          )}
                           <AvatarFallback className="text-xs bg-indigo-50 text-indigo-700">
                             {initials(s.name_en)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <p className="font-medium truncate max-w-40">{s.name_en}</p>
+                          <Link href={`/admin/students/${s.id}`} className="font-medium truncate max-w-40 hover:text-indigo-600 hover:underline block">
+                            {s.name_en}
+                          </Link>
                           {s.name_bn && (
                             <p className="text-xs text-muted-foreground truncate max-w-40">{s.name_bn}</p>
                           )}
@@ -512,7 +522,7 @@ export default function StudentsPage() {
                         <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost" size="icon"
-                            className="size-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="size-7 opacity-60 group-hover:opacity-100 transition-opacity"
                           >
                             <MoreVertical className="size-3.5" />
                           </Button>

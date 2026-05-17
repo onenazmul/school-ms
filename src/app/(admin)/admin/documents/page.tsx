@@ -684,7 +684,7 @@ function PaymentReceiptsTab() {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block rounded-xl border overflow-hidden">
+      <div className="hidden md:block rounded-xl border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40">
             <tr>

@@ -7,35 +7,509 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────
-// BETTER AUTH TABLES
-// ─────────────────────────────────────────────
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  module      String
+  action      String
+  entityType  String
+  entityId    String
+  entityLabel String?
+  actorId     String?
+  actorName   String?
+  actorRole   String   @default("system")
+  description String   @db.Text
+  metadata    String?  @db.LongText
+  createdAt   DateTime @default(now())
 
-model user {
-  id               String    @id
-  name             String
-  email            String?   @unique
-  emailVerified    Boolean   @default(false)
-  image            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([module])
+}
 
-  username         String?   @unique
-  displayUsername  String?
+model Admission {
+  id                          Int                 @id @default(autoincrement())
+  nameEn                      String
+  nameBn                      String?
+  nameAr                      String?
+  dob                         DateTime?
+  birthCertificateNo          String?
+  gender                      String
+  height                      String?
+  weight                      String?
+  nationality                 String?
+  bloodGroup                  String?
+  identifySign                String?
+  presentVillage              String?
+  presentPost                 String?
+  presentUpazilla             String?
+  presentPostCode             String?
+  presentZilla                String?
+  permanentVillage            String?
+  permanentPost               String?
+  permanentUpazilla           String?
+  permanentZilla              String?
+  permanentPostCode           String?
+  fatherNameEn                String?
+  fatherNameBn                String?
+  fatherEducation             String?
+  fatherOccupation            String?
+  fatherMonthlyEarning        String?
+  fatherMobileNo              String?
+  fatherNidNo                 String?
+  fatherDob                   DateTime?
+  motherNameEn                String?
+  motherNameBn                String?
+  motherEducation             String?
+  motherOccupation            String?
+  motherMonthlyEarning        String?
+  motherMobileNo              String?
+  motherNidNo                 String?
+  motherDob                   DateTime?
+  guardianName                String?
+  guardianRelation            String?
+  guardianPresentAddress      String?
+  guardianPermanentAddress    String?
+  guardianEducation           String?
+  guardianOccupation          String?
+  guardianMonthlyEarning      String?
+  guardianMobileNo            String?
+  guardianNidNo               String?
+  guardianDob                 DateTime?
+  className                   String
+  sessionName                 String?
+  division                    String?
+  previousInstituteName       String?
+  siblingDetails              String?
+  status                      String              @default("Pending")
+  applicationFee              Decimal             @default(0.00) @db.Decimal(10, 2)
+  paymentTrackingId           String?
+  studentPhoto                String?
+  studentSignature            String?
+  adminNote                   String?             @db.Text
+  reviewedBy                  String?
+  reviewedAt                  DateTime?
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime     @updatedAt
+  paymentStatus               String              @default("Unpaid")
+  admissionConfigId           Int?
+  enrollmentPaymentStatus     String              @default("Unpaid")
+  enrollmentPaymentTrackingId String?
+  section                     String?
+  admissionConfig             AdmissionConfig?    @relation(fields: [admissionConfigId], references: [id])
+  mark                        AdmissionMark?
+  paymentSubmissions          PaymentSubmission[]
+  student                     Student?
+  user                        user?
 
-  role             String    @default("applicant")
-  twoFactorEnabled Boolean   @default(false)
+  @@index([admissionConfigId], map: "Admission_admissionConfigId_fkey")
+}
 
-  sessions         session[]
-  accounts         account[]
-  twoFactors       twoFactor[]
+model AdmissionConfig {
+  id                    Int                    @id @default(autoincrement())
+  academicYear          String
+  isActive              Boolean                @default(false)
+  applicationStartDate  DateTime?
+  applicationEndDate    DateTime?
+  feeMode               String                 @default("same_for_all")
+  globalFee             Decimal?               @db.Decimal(10, 2)
+  globalTestDay         DateTime?
+  globalTestType        String?
+  globalMaxWrittenMarks Float?
+  globalMaxVivaMarks    Float?
+  resultDay             DateTime?
+  resultVisibility      String                 @default("real_time")
+  marksThresholdEnabled Boolean                @default(false)
+  marksPassThreshold    Float?
+  marksThresholdAction  String                 @default("flag_review")
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime    @updatedAt
+  enrollmentFeeAmount   Decimal?               @db.Decimal(10, 2)
+  enrollmentFeeRequired Boolean                @default(false)
+  enrollmentFeeMode     String                 @default("same_for_all")
+  admissions            Admission[]
+  classConfigs          ClassAdmissionConfig[]
+}
 
-  admissionId      Int?      @unique
-  admission        Admission? @relation(fields: [admissionId], references: [id])
-  studentId        String?   @unique
-  student          Student?  @relation(fields: [studentId], references: [id])
+model AdmissionMark {
+  id           Int       @id @default(autoincrement())
+  admissionId  Int       @unique
+  writtenMarks Float?
+  vivaMarks    Float?
+  totalMarks   Float?
+  enteredBy    String?
+  enteredAt    DateTime  @default(now())
+  updatedAt    DateTime @updatedAt
+  admission    Admission @relation(fields: [admissionId], references: [id])
+}
 
-  @@map("user")
+model Bill {
+  id                    String                  @id
+  studentId             String
+  feeConfigId           String
+  amount                Decimal                 @db.Decimal(10, 2)
+  lateFee               Decimal                 @default(0.00) @db.Decimal(10, 2)
+  dueDate               DateTime
+  month                 String?
+  academicYear          String
+  status                String                  @default("unpaid")
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime    @updatedAt
+  feeConfig             FeeConfig               @relation(fields: [feeConfigId], references: [id])
+  student               Student                 @relation(fields: [studentId], references: [id])
+  paymentSubmissions    PaymentSubmission[]
+  submissionItems       PaymentSubmissionItem[]
+  receiptItems          ReceiptItem[]
+
+  @@index([feeConfigId], map: "Bill_feeConfigId_fkey")
+  @@index([studentId], map: "Bill_studentId_fkey")
+}
+
+model ClassAdmissionConfig {
+  id                  Int             @id @default(autoincrement())
+  admissionConfigId   Int
+  className           String
+  fee                 Decimal?        @db.Decimal(10, 2)
+  testDay             DateTime?
+  testType            String?
+  maxWrittenMarks     Float?
+  maxVivaMarks        Float?
+  resultDay           DateTime?
+  enrollmentFeeAmount Decimal?        @db.Decimal(10, 2)
+  admissionConfig     AdmissionConfig @relation(fields: [admissionConfigId], references: [id], onDelete: Cascade)
+
+  @@index([admissionConfigId], map: "ClassAdmissionConfig_admissionConfigId_fkey")
+}
+
+model ClassSection {
+  id          Int         @id @default(autoincrement())
+  name        String
+  sortOrder   Int         @default(0)
+  isActive    Boolean     @default(true)
+  classId     Int
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime @updatedAt
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, name])
+}
+
+model ClassSubject {
+  id               Int         @id @default(autoincrement())
+  classId          Int
+  subjectId        Int
+  defaultFullMarks Decimal?    @db.Decimal(10, 2)
+  defaultPassMarks Decimal?    @db.Decimal(10, 2)
+  sortOrder        Int         @default(0)
+  isActive         Boolean     @default(true)
+  schoolClass      SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject          Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, subjectId])
+  @@index([subjectId], map: "ClassSubject_subjectId_fkey")
+}
+
+model Exam {
+  id                  String                @id
+  name                String
+  academicYear        String
+  className           String?
+  scheduleMode        String                @default("shared")
+  startDate           DateTime?
+  endDate             DateTime?
+  resultDate          DateTime?
+  resultDaysAfter     Int?
+  status              String                @default("draft")
+  instructions        String?               @db.LongText
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  results             ExamResult[]
+  schedule            ExamSubjectSchedule[]
+}
+
+model ExamResult {
+  id                String    @id
+  studentId         String
+  examName          String
+  academicYear      String
+  subjects          String    @db.LongText
+  totalMarks        Decimal?  @db.Decimal(10, 2)
+  gpa               Decimal?  @db.Decimal(4, 2)
+  grade             String?
+  position          Int?
+  publishedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime @updatedAt
+  attendancePresent Int?
+  attendanceTotal   Int?
+  examId            String?
+  pass              Boolean?
+  teacherRemarks    String?   @db.Text
+  totalStudents     Int?
+  exam              Exam?     @relation(fields: [examId], references: [id])
+  student           Student   @relation(fields: [studentId], references: [id])
+
+  @@index([examId], map: "ExamResult_examId_fkey")
+  @@index([studentId], map: "ExamResult_studentId_fkey")
+}
+
+model ExamSubjectSchedule {
+  id         String   @id
+  examId     String
+  subject    String
+  className  String   @default("")
+  examDate   DateTime
+  startTime  String
+  endTime    String
+  room       String?
+  sortOrder  Int      @default(0)
+  fullMarks  Decimal? @db.Decimal(10, 2)
+  passMarks  Decimal? @db.Decimal(10, 2)
+  subjectId  Int?
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subjectRef Subject? @relation(fields: [subjectId], references: [id])
+
+  @@unique([examId, subject, className])
+  @@index([subjectId], map: "ExamSubjectSchedule_subjectId_fkey")
+}
+
+model FeeConfig {
+  id                String    @id
+  name              String
+  amount            Decimal   @db.Decimal(10, 2)
+  type              String
+  applicableClasses String    @db.LongText
+  dueDay            Int?
+  lateFee           Decimal?  @db.Decimal(10, 2)
+  isActive          Boolean   @default(true)
+  allowBulk         Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime @updatedAt
+  dueDate           DateTime?
+  bills             Bill[]
+}
+
+model PaymentSubmission {
+  id                    String                  @id
+  admissionId           Int?
+  studentId             String?
+  paymentContext        String
+  method                String
+  transactionId         String
+  phoneNumber           String?
+  amountSent            Decimal                 @db.Decimal(10, 2)
+  paymentDate           DateTime
+  notes                 String?                 @db.Text
+  screenshotUrl         String?
+  accountHolderName     String?
+  branch                String?
+  depositSlipNo         String?
+  status                String                  @default("pending")
+  adminNote             String?                 @db.Text
+  verifiedBy            String?
+  verifiedAt            DateTime?
+  receiptNumber         String?
+  submittedAt           DateTime                @default(now())
+  updatedAt             DateTime    @updatedAt
+  billId                String?
+  admission             Admission?              @relation(fields: [admissionId], references: [id])
+  bill                  Bill?                   @relation(fields: [billId], references: [id])
+  student               Student?                @relation(fields: [studentId], references: [id])
+  submissionItems       PaymentSubmissionItem[]
+
+  @@index([admissionId], map: "PaymentSubmission_admissionId_fkey")
+  @@index([billId], map: "PaymentSubmission_billId_fkey")
+  @@index([studentId], map: "PaymentSubmission_studentId_fkey")
+}
+
+model PaymentSubmissionItem {
+  id                String            @id
+  submissionId      String
+  billId            String
+  amount            Decimal           @db.Decimal(10, 2)
+  bill              Bill              @relation(fields: [billId], references: [id])
+  submission        PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, billId])
+  @@index([billId], map: "PaymentSubmissionItem_billId_fkey")
+}
+
+model PromotionRecord {
+  id               String   @id
+  studentId        String
+  fromClass        String
+  fromAcademicYear String
+  toClass          String
+  toAcademicYear   String
+  result           String
+  createdBy        String?
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now())
+  student          Student  @relation(fields: [studentId], references: [id])
+
+  @@index([studentId], map: "PromotionRecord_studentId_fkey")
+}
+
+model Receipt {
+  id             String        @id
+  studentId      String
+  receiptNumber  String        @unique
+  paymentMethod  String
+  receivedAmount Decimal       @db.Decimal(10, 2)
+  paymentDate    DateTime
+  createdBy      String
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime @updatedAt
+  student        Student       @relation(fields: [studentId], references: [id])
+  items          ReceiptItem[]
+
+  @@index([studentId], map: "Receipt_studentId_fkey")
+}
+
+model ReceiptItem {
+  id        String  @id
+  receiptId String
+  billId    String
+  amount    Decimal @db.Decimal(10, 2)
+  bill      Bill    @relation(fields: [billId], references: [id])
+  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([billId], map: "ReceiptItem_billId_fkey")
+  @@index([receiptId], map: "ReceiptItem_receiptId_fkey")
+}
+
+model SchoolClass {
+  id            Int            @id @default(autoincrement())
+  name          String         @unique
+  sortOrder     Int            @default(0)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime @updatedAt
+  sections      ClassSection[]
+  classSubjects ClassSubject[]
+}
+
+model SchoolSetting {
+  id            Int    @id @default(1)
+  name          String @default("School Name")
+  address       String @default("")
+  city          String @default("")
+  phone         String @default("")
+  email         String @default("")
+  website       String @default("")
+  eiin          String @default("")
+  established   String @default("")
+  academicYear  String @default("")
+  weeklyOffDays String @default("[]")
+}
+
+model SmsConfig {
+  id                  Int     @id @default(1)
+  apiKey              String?
+  senderId            String?
+  applicationReceived Boolean @default(true)
+  paymentStatus       Boolean @default(true)
+  testDayReminder     Boolean @default(false)
+  resultRealTime      Boolean @default(false)
+  resultSixHourBefore Boolean @default(false)
+  resultAtTime        Boolean @default(true)
+  resultSixHourAfter  Boolean @default(false)
+}
+
+model SmsLog {
+  id          String   @id
+  admissionId Int?
+  phone       String
+  type        String
+  message     String   @db.Text
+  status      String   @default("sent")
+  error       String?  @db.Text
+  sentAt      DateTime @default(now())
+}
+
+model Student {
+  id                String              @id
+  admissionId       Int                 @unique
+  className         String
+  section           String?
+  rollNumber        String?
+  academicYear      String
+  sessionName       String?
+  status            String              @default("Active")
+  enrolledAt        DateTime            @default(now())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime @updatedAt
+  bills             Bill[]
+  results           ExamResult[]
+  paymentSubmissions PaymentSubmission[]
+  promotionRecords  PromotionRecord[]
+  receipts          Receipt[]
+  admission         Admission           @relation(fields: [admissionId], references: [id])
+  yearEndResults    YearEndResult[]
+  user              user?
+}
+
+model Subject {
+  id            Int                   @id @default(autoincrement())
+  name          String                @unique
+  code          String?               @unique
+  sortOrder     Int                   @default(0)
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime @updatedAt
+  classSubjects ClassSubject[]
+  examSchedules ExamSubjectSchedule[]
+}
+
+model Teacher {
+  id            String    @id
+  name          String
+  email         String?   @unique
+  phone         String?
+  subject       String?
+  designation   String    @default("Teacher")
+  qualification String?
+  joiningDate   DateTime?
+  classes       String    @db.LongText
+  status        String    @default("active")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model YearEndResult {
+  id           String    @id
+  studentId    String
+  academicYear String
+  result       String
+  nextClass    String?
+  notes        String?   @db.Text
+  decidedBy    String?
+  decidedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime @updatedAt
+  student      Student   @relation(fields: [studentId], references: [id])
+
+  @@unique([studentId, academicYear])
+}
+
+model account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime    @updatedAt
+  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId], map: "account_userId_fkey")
 }
 
 model session {
@@ -49,39 +523,7 @@ model session {
   userId    String
   user      user     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("session")
-}
-
-model account {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  user                  user      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?   @db.Text
-  refreshToken          String?   @db.Text
-  idToken               String?   @db.Text
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?   @db.Text
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-
-  @@unique([providerId, accountId])
-  @@map("account")
-}
-
-model verification {
-  id         String    @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime? @default(now())
-  updatedAt  DateTime? @updatedAt
-
-  @@unique([identifier, value])
-  @@map("verification")
+  @@index([userId], map: "session_userId_fkey")
 }
 
 model twoFactor {
@@ -90,538 +532,36 @@ model twoFactor {
   backupCodes String @db.Text
   userId      String @unique
   user        user   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("twoFactor")
 }
 
-// ─────────────────────────────────────────────
-// BUSINESS TABLES
-// ─────────────────────────────────────────────
-
-model Admission {
-  id Int @id @default(autoincrement())
-
-  nameEn               String
-  nameBn               String?
-  nameAr               String?
-  dob                  DateTime?
-  birthCertificateNo   String?
-  gender               String
-  height               String?
-  weight               String?
-  nationality          String?
-  bloodGroup           String?
-  identifySign         String?
-
-  presentVillage       String?
-  presentPost          String?
-  presentUpazilla      String?
-  presentPostCode      String?
-  presentZilla         String?
-
-  permanentVillage     String?
-  permanentPost        String?
-  permanentUpazilla    String?
-  permanentZilla       String?
-  permanentPostCode    String?
-
-  fatherNameEn         String?
-  fatherNameBn         String?
-  fatherEducation      String?
-  fatherOccupation     String?
-  fatherMonthlyEarning String?
-  fatherMobileNo       String?
-  fatherNidNo          String?
-  fatherDob            DateTime?
-
-  motherNameEn         String?
-  motherNameBn         String?
-  motherEducation      String?
-  motherOccupation     String?
-  motherMonthlyEarning String?
-  motherMobileNo       String?
-  motherNidNo          String?
-  motherDob            DateTime?
-
-  guardianName             String?
-  guardianRelation         String?
-  guardianPresentAddress   String?
-  guardianPermanentAddress String?
-  guardianEducation        String?
-  guardianOccupation       String?
-  guardianMonthlyEarning   String?
-  guardianMobileNo         String?
-  guardianNidNo            String?
-  guardianDob              DateTime?
-
-  className             String
-  section               String?
-  sessionName           String?
-  division              String?
-  previousInstituteName String?
-  siblingDetails        String?
-
-  // Pending | Under Review | Awaiting Test | Approved | Enrolled | Rejected
-  status            String  @default("Pending")
-  // Unpaid | Payment Submitted | Paid | Fake Payment Proof
-  paymentStatus     String  @default("Unpaid")
-  applicationFee    Decimal @default(0) @db.Decimal(10, 2)
-  paymentTrackingId String?
-
-  // Enrollment fee (separate from application fee)
-  // Unpaid | Payment Submitted | Paid
-  enrollmentPaymentStatus     String  @default("Unpaid")
-  enrollmentPaymentTrackingId String?
-
-  studentPhoto      String?
-  studentSignature  String?
-
-  adminNote  String?   @db.Text
-  reviewedBy String?
-  reviewedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  admissionConfigId Int?
-  admissionConfig   AdmissionConfig? @relation(fields: [admissionConfigId], references: [id])
-  mark              AdmissionMark?
-
-  user               user?
-  paymentSubmissions PaymentSubmission[]
-  student            Student?
-}
-
-model Student {
-  id          String    @id
-  admissionId Int       @unique
-  admission   Admission @relation(fields: [admissionId], references: [id])
-
-  className    String
-  section      String?
-  rollNumber   String?
-  academicYear String
-  sessionName  String?
-
-  // Active | Inactive | Graduated | Transferred
-  status String @default("Active")
-
-  enrolledAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  user               user?
-  bills              Bill[]
-  receipts           Receipt[]
-  results            ExamResult[]
-  paymentSubmissions PaymentSubmission[]
-  yearEndResults     YearEndResult[]
-  promotionRecords   PromotionRecord[]
-}
-
-model FeeConfig {
-  id               String  @id
+model user {
+  id               String     @id
   name             String
-  amount           Decimal @db.Decimal(10, 2)
-  // monthly | quarterly | yearly | one_time
-  type             String
-  applicableClasses Json
-  dueDay           Int?
-  dueDate          DateTime? // one_time fees: specific due date
-  lateFee          Decimal? @db.Decimal(10, 2)
-  isActive         Boolean  @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  bills Bill[]
+  email            String?    @unique
+  emailVerified    Boolean    @default(false)
+  image            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime @updatedAt
+  username         String?    @unique
+  displayUsername  String?
+  role             String     @default("applicant")
+  twoFactorEnabled Boolean    @default(false)
+  admissionId      Int?       @unique
+  studentId        String?    @unique
+  account          account[]
+  session          session[]
+  twoFactor        twoFactor?
+  admission        Admission? @relation(fields: [admissionId], references: [id])
+  student          Student?   @relation(fields: [studentId], references: [id])
 }
 
-model Bill {
-  id          String    @id
-  studentId   String
-  student     Student   @relation(fields: [studentId], references: [id])
-  feeConfigId String
-  feeConfig   FeeConfig @relation(fields: [feeConfigId], references: [id])
-
-  amount       Decimal @db.Decimal(10, 2)
-  lateFee      Decimal @default(0) @db.Decimal(10, 2)
-  dueDate      DateTime
-  month        String?
-  academicYear String
-  // unpaid | partial | paid | waived
-  status String @default("unpaid")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  receiptItems       ReceiptItem[]
-  paymentSubmissions PaymentSubmission[]
-  submissionItems    PaymentSubmissionItem[]
-}
-
-model Receipt {
-  id        String  @id
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
-
-  receiptNumber  String   @unique
-  // cash | bank_transfer | cheque | online
-  paymentMethod  String
-  receivedAmount Decimal  @db.Decimal(10, 2)
-  paymentDate    DateTime
-  createdBy      String
-
-  notes String? @db.Text
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  items ReceiptItem[]
-}
-
-model ReceiptItem {
-  id        String  @id
-  receiptId String
-  receipt   Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  billId    String
-  bill      Bill    @relation(fields: [billId], references: [id])
-  amount    Decimal @db.Decimal(10, 2)
-}
-
-model PaymentSubmission {
-  id String @id
-
-  admissionId Int?
-  admission   Admission? @relation(fields: [admissionId], references: [id])
-  studentId   String?
-  student     Student?   @relation(fields: [studentId], references: [id])
-  billId      String?
-  bill        Bill?      @relation(fields: [billId], references: [id])
-
-  // admission | enrollment | exam_fee
-  paymentContext String
-  // bkash | rocket | bank_transfer
-  method        String
-  transactionId String
-  phoneNumber   String?
-  amountSent    Decimal  @db.Decimal(10, 2)
-  paymentDate   DateTime
-  notes         String?  @db.Text
-  screenshotUrl String?
-
-  accountHolderName String?
-  branch            String?
-  depositSlipNo     String?
-
-  // pending | under_review | verified | rejected
-  status        String    @default("pending")
-  adminNote     String?   @db.Text
-  verifiedBy    String?
-  verifiedAt    DateTime?
-  receiptNumber String?
-
-  submittedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  submissionItems PaymentSubmissionItem[]
-}
-
-model PaymentSubmissionItem {
-  id           String            @id
-  submissionId String
-  submission   PaymentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  billId       String
-  bill         Bill              @relation(fields: [billId], references: [id])
-  amount       Decimal           @db.Decimal(10, 2)
-
-  @@unique([submissionId, billId])
-}
-
-model Exam {
-  id           String    @id
-  name         String
-  academicYear String
-  // null = all classes, otherwise specific class name
-  className    String?
-  startDate    DateTime?
-  endDate      DateTime?
-  // draft | published
-  status       String    @default("draft")
-  // JSON: string[]
-  instructions Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  schedule ExamSubjectSchedule[]
-  results  ExamResult[]
-}
-
-model ExamSubjectSchedule {
-  id        String   @id
-  examId    String
-  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  subject   String
-  examDate  DateTime
-  startTime String
-  endTime   String
-  room      String?
-  sortOrder Int      @default(0)
-
-  @@unique([examId, subject])
-}
-
-model ExamResult {
-  id        String  @id
-  studentId String
-  student   Student @relation(fields: [studentId], references: [id])
-
-  examId       String?
-  exam         Exam?   @relation(fields: [examId], references: [id])
-  examName     String
-  academicYear String
-  // [{ subject, fullMarks, obtainedMarks, grade, remarks? }]
-  subjects Json
-
-  totalMarks        Decimal? @db.Decimal(10, 2)
-  gpa               Decimal? @db.Decimal(4, 2)
-  grade             String?
-  position          Int?
-  totalStudents     Int?
-  attendancePresent Int?
-  attendanceTotal   Int?
-  pass              Boolean?
-  teacherRemarks    String?  @db.Text
-  publishedAt       DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// ─────────────────────────────────────────────
-// SCHOOL CLASSES
-// ─────────────────────────────────────────────
-
-model SchoolClass {
-  id        Int            @id @default(autoincrement())
-  name      String         @unique
-  sortOrder Int            @default(0)
-  isActive  Boolean        @default(true)
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  sections  ClassSection[]
-}
-
-model ClassSection {
-  id          Int         @id @default(autoincrement())
-  name        String      // e.g. "A", "B", "Science"
-  sortOrder   Int         @default(0)
-  isActive    Boolean     @default(true)
-  classId     Int
-  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  @@unique([classId, name])
-}
-
-// ─────────────────────────────────────────────
-// ADMISSION CONFIG
-// ─────────────────────────────────────────────
-
-model AdmissionConfig {
-  id           Int     @id @default(autoincrement())
-  academicYear String  // e.g. "2026"
-  isActive     Boolean @default(false)
-
-  applicationStartDate DateTime?
-  applicationEndDate   DateTime?
-
-  // "same_for_all" | "per_class"
-  feeMode    String          @default("same_for_all")
-  globalFee  Decimal?        @db.Decimal(10, 2)
-
-  globalTestDay         DateTime?
-  globalTestType        String?   // "written" | "viva" | "both"
-  globalMaxWrittenMarks Float?
-  globalMaxVivaMarks    Float?
-
-  resultDay        DateTime?
-  // "real_time" | "result_day"
-  resultVisibility String    @default("real_time")
-
-  marksThresholdEnabled Boolean @default(false)
-  marksPassThreshold    Float?
-  // "auto_enroll" | "flag_review"
-  marksThresholdAction  String  @default("flag_review")
-
-  // Enrollment fee (paid after approval, before student account is created)
-  // "same_for_all" | "per_class"
-  enrollmentFeeMode     String   @default("same_for_all")
-  enrollmentFeeRequired Boolean  @default(false)
-  enrollmentFeeAmount   Decimal? @db.Decimal(10, 2)
-
-  classConfigs ClassAdmissionConfig[]
-  admissions   Admission[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model ClassAdmissionConfig {
-  id                Int             @id @default(autoincrement())
-  admissionConfigId Int
-  admissionConfig   AdmissionConfig @relation(fields: [admissionConfigId], references: [id], onDelete: Cascade)
-
-  // matches Admission.className
-  className String
-
-  fee                 Decimal? @db.Decimal(10, 2)
-  enrollmentFeeAmount Decimal? @db.Decimal(10, 2)
-  testDay             DateTime?
-  testType            String?   // "written" | "viva" | "both"
-  maxWrittenMarks     Float?
-  maxVivaMarks        Float?
-  resultDay           DateTime?
-}
-
-model AdmissionMark {
-  id          Int       @id @default(autoincrement())
-  admissionId Int       @unique
-  admission   Admission @relation(fields: [admissionId], references: [id])
-
-  writtenMarks Float?
-  vivaMarks    Float?
-  totalMarks   Float?
-  enteredBy    String?
-  enteredAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
-// ─────────────────────────────────────────────
-// SMS
-// ─────────────────────────────────────────────
-
-model Teacher {
-  id            String    @id
-  name          String
-  email         String?   @unique
-  phone         String?
-  subject       String?
-  designation   String    @default("Teacher")
-  qualification String?
-  joiningDate   DateTime?
-  classes       Json      @default("[]")
-  // active | inactive
-  status        String    @default("active")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-}
-
-model SmsConfig {
-  id       Int     @id @default(1)
-  apiKey   String?
-  senderId String?
-
-  applicationReceived Boolean @default(true)
-  paymentStatus       Boolean @default(true)
-  testDayReminder     Boolean @default(false)
-  resultRealTime      Boolean @default(false)
-  resultSixHourBefore Boolean @default(false)
-  resultAtTime        Boolean @default(true)
-  resultSixHourAfter  Boolean @default(false)
-}
-
-model SmsLog {
-  id          String  @id @default(cuid())
-  admissionId Int?
-  phone       String
-  // "application_received" | "payment_status" | "test_day" | "result"
-  type        String
-  message     String  @db.Text
-  // "sent" | "failed"
-  status      String  @default("sent")
-  error       String? @db.Text
-  sentAt      DateTime @default(now())
-}
-
-// ─────────────────────────────────────────────
-// School Settings (singleton, id = 1)
-// ─────────────────────────────────────────────
-
-model SchoolSetting {
-  id          Int    @id @default(1)
-  name        String @default("School Name")
-  address     String @default("")
-  city        String @default("")
-  phone       String @default("")
-  email       String @default("")
-  website     String @default("")
-  eiin        String @default("")
-  established String @default("")
-}
-
-// ─────────────────────────────────────────────
-// ACTIVITY LOG
-// ─────────────────────────────────────────────
-
-model ActivityLog {
-  id          Int      @id @default(autoincrement())
-  // admission | student | payment | fee | exam | result | system
-  module      String
-  action      String
-  entityType  String
-  entityId    String
-  entityLabel String?
-  actorId     String?
-  actorName   String?
-  actorRole   String   @default("system")
-  description String   @db.Text
-  metadata    Json?
-  createdAt   DateTime @default(now())
-
-  @@index([module])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-}
-
-// ─────────────────────────────────────────────
-// YEAR-END RESULTS & PROMOTION HISTORY
-// ─────────────────────────────────────────────
-
-model YearEndResult {
-  id           String  @id
-  studentId    String
-  student      Student @relation(fields: [studentId], references: [id])
-
-  academicYear String
-  // Pass | Fail | Supplementary
-  result       String
-  nextClass    String?
-  notes        String?   @db.Text
-  decidedBy    String?
-  decidedAt    DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([studentId, academicYear])
-}
-
-model PromotionRecord {
-  id               String  @id
-  studentId        String
-  student          Student @relation(fields: [studentId], references: [id])
-
-  fromClass        String
-  fromAcademicYear String
-  toClass          String
-  toAcademicYear   String
-  // Pass | Fail | Supplementary
-  result           String
-  createdBy        String?
-  notes            String? @db.Text
-
-  createdAt DateTime @default(now())
+model verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime?
+
+  @@unique([identifier, value])
 }

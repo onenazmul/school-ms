@@ -1,6 +1,6 @@
 // components/documents/pdf/AdmitCardPDF.tsx
 import {
-  Document, Page, View, Text, StyleSheet,
+  Document, Page, View, Text, StyleSheet, Image,
 } from "@react-pdf/renderer";
 
 export type AdmitCardStudent = {
@@ -12,6 +12,7 @@ export type AdmitCardStudent = {
   roll_number: string | null;
   gender: string | null;
   dob: string | null;
+  photo?: string | null;
 };
 
 export type AdmitCardExam = {
@@ -302,7 +303,11 @@ export function AdmitCardPDF({ student, examCard, schoolInfo }: Props) {
               ))}
             </View>
             <View style={styles.photoBox}>
-              <Text style={styles.photoLabel}>PHOTO</Text>
+              {student.photo ? (
+                <Image src={student.photo} style={{ width: 60, height: 76, objectFit: "cover", borderRadius: 3 }} />
+              ) : (
+                <Text style={styles.photoLabel}>PHOTO</Text>
+              )}
             </View>
           </View>
 

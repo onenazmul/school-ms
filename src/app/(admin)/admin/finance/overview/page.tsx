@@ -661,7 +661,7 @@ export default function FinanceOverviewPage() {
 
       {/* Floating Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white px-4 py-3 shadow-xl shadow-black/20">
+        <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white px-4 py-3 shadow-xl shadow-black/20">
           <p className="text-sm font-medium">
             {selectedIds.size} bill{selectedIds.size !== 1 ? "s" : ""} selected
             <span className="text-slate-400 ml-1.5 font-normal">

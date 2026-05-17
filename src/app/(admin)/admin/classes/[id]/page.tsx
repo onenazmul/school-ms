@@ -3,7 +3,7 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,10 +11,15 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Users, BookOpen, Search, Plus } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { ArrowLeft, Users, BookOpen, Search, Plus, Trash2, Loader2, Pencil, Check, X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,15 +48,275 @@ type ClassResponse = {
   students: Student[];
 };
 
-// Keep static mock data for tabs not yet backed by an API
-const SUBJECT_COLORS = [
-  "bg-indigo-50 text-indigo-700","bg-violet-50 text-violet-700","bg-emerald-50 text-emerald-700",
-  "bg-amber-50 text-amber-700","bg-rose-50 text-rose-700","bg-cyan-50 text-cyan-700",
-  "bg-orange-50 text-orange-700","bg-teal-50 text-teal-700",
-];
+type MasterSubject = { id: number; name: string; code: string | null };
+type ClassSubjectRow = {
+  id: number;
+  subject_id: number;
+  subject_name: string;
+  subject_code: string | null;
+  default_full_marks: number | null;
+  default_pass_marks: number | null;
+  sort_order: number;
+};
 
 function initials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+// ── Class Subjects Tab ────────────────────────────────────────────────────────
+
+function ClassSubjectsTab({ classId }: { classId: string }) {
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [addFullMarks, setAddFullMarks] = useState("100");
+  const [addPassMarks, setAddPassMarks] = useState("33");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editFull, setEditFull] = useState("");
+  const [editPass, setEditPass] = useState("");
+
+  const toggleId = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+
+  const { data: csData, isLoading: csLoading } = useQuery<{ subjects: ClassSubjectRow[] }>({
+    queryKey: ["class-subjects", classId],
+    queryFn: () => fetch(`/api/v1/admin/classes/${classId}/subjects`).then((r) => r.json()),
+  });
+
+  const { data: masterData } = useQuery<{ subjects: MasterSubject[] }>({
+    queryKey: ["admin-subjects"],
+    queryFn: () => fetch("/api/v1/admin/subjects").then((r) => r.json()),
+  });
+
+  const classSubjects = csData?.subjects ?? [];
+  const masterSubjects = masterData?.subjects ?? [];
+  const assignedIds = new Set(classSubjects.map((cs) => cs.subject_id));
+  const available = masterSubjects.filter((s) => !assignedIds.has(s.id));
+
+  const addMutation = useMutation({
+    mutationFn: async () => {
+      for (const subjectId of Array.from(selectedIds)) {
+        const r = await fetch(`/api/v1/admin/classes/${classId}/subjects`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject_id: subjectId,
+            default_full_marks: addFullMarks ? Number(addFullMarks) : null,
+            default_pass_marks: addPassMarks ? Number(addPassMarks) : null,
+          }),
+        });
+        if (!r.ok) throw new Error((await r.json()).message);
+      }
+    },
+    onSuccess: () => {
+      toast.success(`${selectedIds.size} subject${selectedIds.size !== 1 ? "s" : ""} added`);
+      qc.invalidateQueries({ queryKey: ["class-subjects", classId] });
+      setAddOpen(false);
+      setSelectedIds(new Set()); setAddFullMarks("100"); setAddPassMarks("33");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, full, pass }: { id: number; full: string; pass: string }) =>
+      fetch(`/api/v1/admin/classes/${classId}/subjects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          default_full_marks: full ? Number(full) : null,
+          default_pass_marks: pass ? Number(pass) : null,
+        }),
+      }).then(async (r) => { if (!r.ok) throw new Error((await r.json()).message); return r.json(); }),
+    onSuccess: () => {
+      toast.success("Updated");
+      qc.invalidateQueries({ queryKey: ["class-subjects", classId] });
+      setEditId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (id: number) =>
+      fetch(`/api/v1/admin/classes/${classId}/subjects/${id}`, { method: "DELETE" })
+        .then(async (r) => { if (!r.ok) throw new Error((await r.json()).message); return r.json(); }),
+    onSuccess: () => {
+      toast.success("Subject removed");
+      qc.invalidateQueries({ queryKey: ["class-subjects", classId] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {classSubjects.length} subject{classSubjects.length !== 1 ? "s" : ""} assigned
+        </p>
+        <Button
+          size="sm"
+          className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+          onClick={() => setAddOpen(true)}
+          disabled={available.length === 0}
+        >
+          <Plus className="size-3.5" />Add Subject
+        </Button>
+      </div>
+
+      {csLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
+        </div>
+      ) : classSubjects.length === 0 ? (
+        <div className="rounded-xl border py-12 text-center text-sm text-muted-foreground">
+          No subjects assigned yet.{" "}
+          {masterSubjects.length === 0
+            ? "Add subjects in Settings → Subjects first."
+            : "Click \"Add Subject\" to assign subjects from the master list."}
+        </div>
+      ) : (
+        <div className="rounded-xl border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">#</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Subject</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Code</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Full Marks</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Pass Marks</th>
+                <th className="px-4 py-3 w-20" />
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {classSubjects.map((cs, idx) => (
+                <tr key={cs.id} className="hover:bg-muted/20">
+                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{idx + 1}</td>
+                  <td className="px-4 py-2.5 font-medium">{cs.subject_name}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{cs.subject_code ?? "—"}</td>
+                  {editId === cs.id ? (
+                    <>
+                      <td className="px-2 py-1.5">
+                        <Input className="h-7 text-sm w-20" type="number" value={editFull}
+                          onChange={(e) => setEditFull(e.target.value)} placeholder="100" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <Input className="h-7 text-sm w-20" type="number" value={editPass}
+                          onChange={(e) => setEditPass(e.target.value)} placeholder="33" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <div className="flex gap-1 justify-end">
+                          <button
+                            onClick={() => updateMutation.mutate({ id: cs.id, full: editFull, pass: editPass })}
+                            disabled={updateMutation.isPending}
+                            className="text-green-600 hover:text-green-700 disabled:opacity-40"
+                          >
+                            {updateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                          </button>
+                          <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground">
+                            <X className="size-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-2.5 text-muted-foreground">{cs.default_full_marks ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{cs.default_pass_marks ?? "—"}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex gap-1 justify-end">
+                          <button
+                            onClick={() => { setEditId(cs.id); setEditFull(String(cs.default_full_marks ?? "")); setEditPass(String(cs.default_pass_marks ?? "")); }}
+                            className="text-muted-foreground hover:text-indigo-600 transition-colors"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { if (confirm(`Remove "${cs.subject_name}" from this class?`)) removeMutation.mutate(cs.id); }}
+                            disabled={removeMutation.isPending}
+                            className="text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-40"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setSelectedIds(new Set()); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Add Subjects to Class</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-1">
+            {available.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">All subjects are already assigned to this class.</p>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>Select Subjects *</Label>
+                    <button
+                      className="text-xs text-indigo-600 hover:underline"
+                      onClick={() => setSelectedIds(new Set(available.map((s) => s.id)))}
+                    >
+                      Select all
+                    </button>
+                  </div>
+                  <div className="rounded-lg border divide-y max-h-52 overflow-y-auto">
+                    {available.map((s) => (
+                      <label key={s.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="size-4 rounded accent-indigo-600"
+                          checked={selectedIds.has(s.id)}
+                          onChange={() => toggleId(s.id)}
+                        />
+                        <span className="text-sm font-medium flex-1">{s.name}</span>
+                        {s.code && <span className="text-xs text-muted-foreground font-mono">{s.code}</span>}
+                      </label>
+                    ))}
+                  </div>
+                  {selectedIds.size > 0 && (
+                    <p className="text-xs text-muted-foreground">{selectedIds.size} subject{selectedIds.size !== 1 ? "s" : ""} selected</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Full Marks (default)</Label>
+                    <Input type="number" placeholder="100" value={addFullMarks}
+                      onChange={(e) => setAddFullMarks(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Pass Marks (default)</Label>
+                    <Input type="number" placeholder="33" value={addPassMarks}
+                      onChange={(e) => setAddPassMarks(e.target.value)} />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAddOpen(false); setSelectedIds(new Set()); }}>Cancel</Button>
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              disabled={selectedIds.size === 0 || addMutation.isPending}
+              onClick={() => addMutation.mutate()}
+            >
+              {addMutation.isPending ? <Loader2 className="size-4 animate-spin mr-2" /> : null}
+              {selectedIds.size > 0 ? `Add ${selectedIds.size} Subject${selectedIds.size !== 1 ? "s" : ""}` : "Add Subjects"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -122,11 +387,16 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
-      <Tabs defaultValue="students">
+      <Tabs defaultValue="subjects">
         <TabsList>
-          <TabsTrigger value="students">Students</TabsTrigger>
           <TabsTrigger value="subjects">Subjects</TabsTrigger>
+          <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
+
+        {/* Subjects tab */}
+        <TabsContent value="subjects" className="mt-4">
+          <ClassSubjectsTab classId={id} />
+        </TabsContent>
 
         {/* Students tab */}
         <TabsContent value="students" className="mt-4 space-y-4">
@@ -208,7 +478,7 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
                           </Badge>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                             <Button variant="ghost" size="icon" className="size-7" asChild>
                               <Link href={`/admin/students/${s.id}`}><Search className="size-3.5" /></Link>
                             </Button>
@@ -226,14 +496,6 @@ export default function ClassDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         </TabsContent>
 
-        {/* Subjects tab — placeholder */}
-        <TabsContent value="subjects" className="mt-4">
-          <Card>
-            <CardContent className="pt-6 pb-6 text-center text-sm text-muted-foreground">
-              Subject assignments coming soon.
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

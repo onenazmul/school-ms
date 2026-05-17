@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, GripVertical, Loader2, ChevronDown, ChevronRight, Tag, X, Check,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -171,7 +173,7 @@ function SectionChip({ section, classId }: { section: ClassSection; classId: num
       >
         {section.name}
         <button
-          className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 hover:text-destructive"
+          className="opacity-60 group-hover:opacity-100 transition-opacity ml-0.5 hover:text-destructive"
           onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
         >
           <X className="size-2.5" />
@@ -291,130 +293,140 @@ export default function ClassesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Classes</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {active.length} active · {inactive.length} inactive
-          </p>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">Classes</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {active.length} active · {inactive.length} inactive
+            </p>
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={openNew}>
+            <Plus className="size-4" /> Add Class
+          </Button>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={openNew}>
-          <Plus className="size-4" /> Add Class
-        </Button>
-      </div>
 
-      {isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
-          <Loader2 className="size-4 animate-spin" /> Loading classes…
-        </div>
-      ) : classes.length === 0 ? (
-        <div className="rounded-xl border bg-background p-10 text-center text-sm text-muted-foreground">
-          No classes yet. Add your first class to get started.
-        </div>
-      ) : (
-        <div className="rounded-xl border bg-background divide-y">
-          {classes.map((cls) => {
-            const expanded = expandedIds.has(cls.id);
-            return (
-              <div key={cls.id}>
-                {/* Class row */}
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <GripVertical className="size-4 text-muted-foreground/40 shrink-0" />
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
+            <Loader2 className="size-4 animate-spin" /> Loading classes…
+          </div>
+        ) : classes.length === 0 ? (
+          <div className="rounded-xl border bg-background p-10 text-center text-sm text-muted-foreground">
+            No classes yet. Add your first class to get started.
+          </div>
+        ) : (
+          <div className="rounded-xl border bg-background divide-y">
+            {classes.map((cls) => {
+              const expanded = expandedIds.has(cls.id);
+              return (
+                <div key={cls.id}>
+                  {/* Class row */}
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <GripVertical className="size-4 text-muted-foreground/40 shrink-0" />
 
-                  {/* Expand toggle */}
-                  <button
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                    onClick={() => toggleExpand(cls.id)}
-                    title={expanded ? "Collapse sections" : "Expand sections"}
-                  >
-                    {expanded
-                      ? <ChevronDown className="size-4" />
-                      : <ChevronRight className="size-4" />}
-                  </button>
+                    {/* Expand toggle */}
+                    <button
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => toggleExpand(cls.id)}
+                      title={expanded ? "Collapse sections" : "Expand sections"}
+                    >
+                      {expanded
+                        ? <ChevronDown className="size-4" />
+                        : <ChevronRight className="size-4" />}
+                    </button>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm">{cls.name}</span>
-                      {cls.sections.length > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          {cls.sections.length} section{cls.sections.length !== 1 ? "s" : ""}
-                        </span>
-                      )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{cls.name}</span>
+                        {cls.sections.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            {cls.sections.length} section{cls.sections.length !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    <Badge
+                      variant={cls.isActive ? "default" : "secondary"}
+                      className={cls.isActive ? "bg-green-600 text-white" : ""}
+                    >
+                      {cls.isActive ? "Active" : "Inactive"}
+                    </Badge>
+
+                    <Switch
+                      checked={cls.isActive}
+                      onCheckedChange={(v) => toggleMutation.mutate({ id: cls.id, isActive: v })}
+                      className="shrink-0"
+                    />
+
+                    <Button
+                      variant="ghost" size="icon" className="size-8 shrink-0"
+                      title="View class detail & subjects"
+                      asChild
+                    >
+                      <Link href={`/admin/classes/${cls.id}`}>
+                        <ExternalLink className="size-3.5" />
+                      </Link>
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon" className="size-8 shrink-0"
+                      onClick={() => openEdit(cls)}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteId(cls.id)}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
 
-                  <Badge
-                    variant={cls.isActive ? "default" : "secondary"}
-                    className={cls.isActive ? "bg-green-600 text-white" : ""}
-                  >
-                    {cls.isActive ? "Active" : "Inactive"}
-                  </Badge>
+                  {/* Sections panel */}
+                  {expanded && (
+                    <div className="border-t bg-muted/20 px-10 py-3 space-y-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Tag className="size-3.5 text-muted-foreground" />
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sections</span>
+                      </div>
 
-                  <Switch
-                    checked={cls.isActive}
-                    onCheckedChange={(v) => toggleMutation.mutate({ id: cls.id, isActive: v })}
-                    className="shrink-0"
-                  />
+                      <div className="flex flex-wrap gap-2 items-center">
+                        {cls.sections.length === 0 && addingSectionFor !== cls.id && (
+                          <span className="text-xs text-muted-foreground">No sections yet.</span>
+                        )}
+                        {cls.sections.map((sec) => (
+                          <SectionChip key={sec.id} section={sec} classId={cls.id} />
+                        ))}
+                        {addingSectionFor !== cls.id && (
+                          <button
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground border border-dashed rounded px-2 py-0.5 hover:text-foreground hover:border-foreground transition-colors"
+                            onClick={() => setAddingSectionFor(cls.id)}
+                          >
+                            <Plus className="size-3" /> Add section
+                          </button>
+                        )}
+                      </div>
 
-                  <Button
-                    variant="ghost" size="icon" className="size-8 shrink-0"
-                    onClick={() => openEdit(cls)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost" size="icon"
-                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteId(cls.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                      {addingSectionFor === cls.id && (
+                        <AddSectionRow
+                          classId={cls.id}
+                          onDone={() => setAddingSectionFor(null)}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
+              );
+            })}
+          </div>
+        )}
 
-                {/* Sections panel */}
-                {expanded && (
-                  <div className="border-t bg-muted/20 px-10 py-3 space-y-2">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Tag className="size-3.5 text-muted-foreground" />
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Sections</span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {cls.sections.length === 0 && addingSectionFor !== cls.id && (
-                        <span className="text-xs text-muted-foreground">No sections yet.</span>
-                      )}
-                      {cls.sections.map((sec) => (
-                        <SectionChip key={sec.id} section={sec} classId={cls.id} />
-                      ))}
-                      {addingSectionFor !== cls.id && (
-                        <button
-                          className="inline-flex items-center gap-1 text-xs text-muted-foreground border border-dashed rounded px-2 py-0.5 hover:text-foreground hover:border-foreground transition-colors"
-                          onClick={() => setAddingSectionFor(cls.id)}
-                        >
-                          <Plus className="size-3" /> Add section
-                        </button>
-                      )}
-                    </div>
-
-                    {addingSectionFor === cls.id && (
-                      <AddSectionRow
-                        classId={cls.id}
-                        onDone={() => setAddingSectionFor(null)}
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      <p className="text-xs text-muted-foreground">
-        These class names are used across the system — in admission applications, fee configuration, and student enrollment.
-        Active classes appear in the admission apply form. Sections within a class are available when enrolling students.
-      </p>
+        <p className="text-xs text-muted-foreground">
+          These class names are used across the system — in admission applications, fee configuration, and student enrollment.
+          Active classes appear in the admission apply form. Sections within a class are available when enrolling students.
+        </p>
+      </div>
 
       {/* Add / Edit Class Dialog */}
       <Dialog
@@ -471,7 +483,7 @@ export default function ClassesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
+      {/* Delete Class Confirm */}
       <AlertDialog
         open={deleteId !== null}
         onOpenChange={(o) => { if (!o) setDeleteId(null); }}

@@ -19,7 +19,13 @@ export async function GET(req: NextRequest) {
     create: { id: 1 },
     update: {},
   });
-  return NextResponse.json({ setting });
+  return NextResponse.json({
+    setting: {
+      ...setting,
+      academic_year: setting.academicYear,
+      weekly_off_days: JSON.parse(setting.weeklyOffDays || "[]") as string[],
+    },
+  });
 }
 
 export async function PUT(req: NextRequest) {
@@ -27,31 +33,41 @@ export async function PUT(req: NextRequest) {
   if (deny) return deny;
 
   const body = await req.json();
-  const { name, address, city, phone, email, website, eiin, established } = body;
+  const { name, address, city, phone, email, website, eiin, established, academic_year, weekly_off_days } = body;
 
   const setting = await db.schoolSetting.upsert({
     where: { id: 1 },
     create: {
       id: 1,
-      name:        name        ?? "",
-      address:     address     ?? "",
-      city:        city        ?? "",
-      phone:       phone       ?? "",
-      email:       email       ?? "",
-      website:     website     ?? "",
-      eiin:        eiin        ?? "",
-      established: established ?? "",
+      name:         name        ?? "",
+      address:      address     ?? "",
+      city:         city        ?? "",
+      phone:        phone       ?? "",
+      email:        email       ?? "",
+      website:      website     ?? "",
+      eiin:         eiin        ?? "",
+      established:  established ?? "",
+      academicYear: academic_year ?? "",
+      weeklyOffDays: Array.isArray(weekly_off_days) ? JSON.stringify(weekly_off_days) : "[]",
     },
     update: {
-      ...(name        !== undefined && { name }),
-      ...(address     !== undefined && { address }),
-      ...(city        !== undefined && { city }),
-      ...(phone       !== undefined && { phone }),
-      ...(email       !== undefined && { email }),
-      ...(website     !== undefined && { website }),
-      ...(eiin        !== undefined && { eiin }),
-      ...(established !== undefined && { established }),
+      ...(name          !== undefined && { name }),
+      ...(address       !== undefined && { address }),
+      ...(city          !== undefined && { city }),
+      ...(phone         !== undefined && { phone }),
+      ...(email         !== undefined && { email }),
+      ...(website       !== undefined && { website }),
+      ...(eiin          !== undefined && { eiin }),
+      ...(established   !== undefined && { established }),
+      ...(academic_year !== undefined && { academicYear: academic_year }),
+      ...(weekly_off_days !== undefined && { weeklyOffDays: JSON.stringify(weekly_off_days) }),
     },
   });
-  return NextResponse.json({ setting });
+  return NextResponse.json({
+    setting: {
+      ...setting,
+      academic_year: setting.academicYear,
+      weekly_off_days: JSON.parse(setting.weeklyOffDays || "[]") as string[],
+    },
+  });
 }

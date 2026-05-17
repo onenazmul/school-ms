@@ -19,7 +19,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, School, Calendar, MessageSquare, Shield } from "lucide-react";
+import { Loader2, School, Calendar, MessageSquare, Shield, BookMarked, Plus, Pencil, Trash2, Check, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 const schoolSchema = z.object({
   name:         z.string().min(2),
@@ -44,11 +45,12 @@ type AcademicInput = z.infer<typeof academicSchema>;
 
 const WEEKDAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-type SectionKey = "school" | "academic" | "sms" | "security";
+type SectionKey = "school" | "academic" | "subjects" | "sms" | "security";
 
 const SECTIONS: { key: SectionKey; label: string; icon: any }[] = [
   { key: "school",   label: "School Info",      icon: School },
   { key: "academic", label: "Academic Settings", icon: Calendar },
+  { key: "subjects", label: "Subjects",          icon: BookMarked },
   { key: "sms",      label: "SMS Settings",      icon: MessageSquare },
   { key: "security", label: "Security",          icon: Shield },
 ];
@@ -57,6 +59,7 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<SectionKey>("school");
   const [savingAcademic, setSavingAcademic] = useState(false);
   const [workingDays, setWorkingDays] = useState(["Sunday","Monday","Tuesday","Wednesday","Thursday"]);
+  const [workingDaysSeeded, setWorkingDaysSeeded] = useState(false);
 
   // ── School info from DB ──────────────────────────────────────────────────
   const { data: settingData, isLoading: settingLoading } = useQuery<{ setting: SchoolInput & { id: number } }>({
@@ -84,6 +87,15 @@ export default function SettingsPage() {
     setFormSeeded(true);
   }
 
+  // Seed working days from DB off-days
+  if (settingData?.setting && !workingDaysSeeded) {
+    const offDays: string[] = (settingData.setting as any).weekly_off_days ?? [];
+    if (offDays.length > 0) {
+      setWorkingDays(WEEKDAYS.filter((d) => !offDays.includes(d)));
+    }
+    setWorkingDaysSeeded(true);
+  }
+
   const saveMutation = useMutation({
     mutationFn: (body: SchoolInput) =>
       fetch("/api/v1/admin/settings", {
@@ -98,16 +110,28 @@ export default function SettingsPage() {
   const academicForm = useForm<AcademicInput>({
     resolver: zodResolver(academicSchema),
     defaultValues: {
-      academicYear: "2025", sessionStart: "2025-01-01", sessionEnd: "2025-12-31",
+      academicYear: (settingData?.setting as any)?.academic_year ?? "",
+      sessionStart: "2025-01-01", sessionEnd: "2025-12-31",
       gradingSystem: "gpa", workingDays: ["Sunday","Monday","Tuesday","Wednesday","Thursday"],
     },
   });
 
   async function saveAcademic(values: AcademicInput) {
     setSavingAcademic(true);
-    await new Promise(r => setTimeout(r, 700));
-    setSavingAcademic(false);
-    toast.success("Academic settings saved");
+    try {
+      const offDays = WEEKDAYS.filter((d) => !workingDays.includes(d));
+      const r = await fetch("/api/v1/admin/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ academic_year: values.academicYear, weekly_off_days: offDays }),
+      });
+      if (!r.ok) throw new Error((await r.json()).message);
+      toast.success("Academic settings saved");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save");
+    } finally {
+      setSavingAcademic(false);
+    }
   }
 
   return (
@@ -260,6 +284,8 @@ export default function SettingsPage() {
             </Card>
           )}
 
+          {activeSection === "subjects" && <SubjectsSettings />}
+
           {activeSection === "sms" && <SmsSettings />}
 
           {activeSection === "security" && (
@@ -306,6 +332,193 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Subjects Settings Component ─────────────────────────────────────────────
+
+type SubjectRow = { id: number; name: string; code: string | null; sort_order: number; is_active: boolean };
+
+function SubjectsSettings() {
+  const qc = useQueryClient();
+  const [addName, setAddName]   = useState("");
+  const [addCode, setAddCode]   = useState("");
+  const [editId, setEditId]     = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCode, setEditCode] = useState("");
+
+  const { data, isLoading } = useQuery<{ subjects: SubjectRow[] }>({
+    queryKey: ["admin-subjects"],
+    queryFn: () => fetch("/api/v1/admin/subjects").then((r) => r.json()),
+  });
+
+  const subjects = data?.subjects ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      fetch("/api/v1/admin/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: addName.trim(), code: addCode.trim() || null }),
+      }).then(async (r) => { if (!r.ok) throw new Error((await r.json()).message); return r.json(); }),
+    onSuccess: () => {
+      toast.success("Subject added");
+      qc.invalidateQueries({ queryKey: ["admin-subjects"] });
+      setAddName(""); setAddCode("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, name, code }: { id: number; name: string; code: string | null }) =>
+      fetch(`/api/v1/admin/subjects/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, code }),
+      }).then(async (r) => { if (!r.ok) throw new Error((await r.json()).message); return r.json(); }),
+    onSuccess: () => {
+      toast.success("Subject updated");
+      qc.invalidateQueries({ queryKey: ["admin-subjects"] });
+      setEditId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      fetch(`/api/v1/admin/subjects/${id}`, { method: "DELETE" })
+        .then(async (r) => { if (!r.ok) throw new Error((await r.json()).message); return r.json(); }),
+    onSuccess: () => {
+      toast.success("Subject deleted");
+      qc.invalidateQueries({ queryKey: ["admin-subjects"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  function startEdit(s: SubjectRow) {
+    setEditId(s.id);
+    setEditName(s.name);
+    setEditCode(s.code ?? "");
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-4">
+        <CardTitle className="text-sm">Subject Master List</CardTitle>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Define all subjects once here. Classes pick from this list; exams auto-fill from class subjects.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Add row */}
+        <div className="flex gap-2">
+          <Input
+            placeholder="Subject name (e.g. Mathematics)"
+            value={addName}
+            onChange={(e) => setAddName(e.target.value)}
+            className="flex-1"
+            onKeyDown={(e) => { if (e.key === "Enter" && addName.trim()) createMutation.mutate(); }}
+          />
+          <Input
+            placeholder="Code (e.g. MATH)"
+            value={addCode}
+            onChange={(e) => setAddCode(e.target.value.toUpperCase())}
+            className="w-28"
+            onKeyDown={(e) => { if (e.key === "Enter" && addName.trim()) createMutation.mutate(); }}
+          />
+          <Button
+            className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+            disabled={!addName.trim() || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            {createMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            Add
+          </Button>
+        </div>
+
+        {/* List */}
+        {isLoading ? (
+          <div className="text-sm text-muted-foreground py-4">Loading…</div>
+        ) : subjects.length === 0 ? (
+          <div className="rounded-xl border py-10 text-center text-sm text-muted-foreground">
+            No subjects yet. Add your first subject above.
+          </div>
+        ) : (
+          <div className="rounded-xl border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">#</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Subject Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Code</th>
+                  <th className="px-4 py-3 w-20" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {subjects.map((s, idx) => (
+                  <tr key={s.id} className="hover:bg-muted/20">
+                    <td className="px-4 py-2.5 text-muted-foreground text-xs">{idx + 1}</td>
+                    {editId === s.id ? (
+                      <>
+                        <td className="px-2 py-1.5">
+                          <Input
+                            className="h-7 text-sm"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            autoFocus
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input
+                            className="h-7 text-sm w-24"
+                            value={editCode}
+                            onChange={(e) => setEditCode(e.target.value.toUpperCase())}
+                            placeholder="Code"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5 text-right">
+                          <div className="flex gap-1 justify-end">
+                            <button
+                              onClick={() => updateMutation.mutate({ id: s.id, name: editName.trim(), code: editCode.trim() || null })}
+                              disabled={!editName.trim() || updateMutation.isPending}
+                              className="text-green-600 hover:text-green-700 disabled:opacity-40"
+                            >
+                              {updateMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                            </button>
+                            <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground">
+                              <X className="size-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-2.5 font-medium">{s.name}</td>
+                        <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{s.code ?? "—"}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          <div className="flex gap-1 justify-end">
+                            <button onClick={() => startEdit(s)} className="text-muted-foreground hover:text-indigo-600 transition-colors">
+                              <Pencil className="size-3.5" />
+                            </button>
+                            <button
+                              onClick={() => { if (confirm(`Delete "${s.name}"?`)) deleteMutation.mutate(s.id); }}
+                              disabled={deleteMutation.isPending}
+                              className="text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-40"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

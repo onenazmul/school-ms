@@ -1426,7 +1426,7 @@ function AdmissionsContent() {
                       <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="size-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" className="size-7 opacity-60 group-hover:opacity-100 transition-opacity">
                               <MoreVertical className="size-3.5" />
                             </Button>
                           </DropdownMenuTrigger>

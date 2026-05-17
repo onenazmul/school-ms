@@ -42,7 +42,7 @@ export async function GET(req: Request, { params }: Ctx) {
       roll_number: r.student.rollNumber ?? null,
       exam_name: r.examName,
       academic_year: r.academicYear,
-      subjects: r.subjects,
+      subjects: r.subjects ? JSON.parse(r.subjects as string) : [],
       total_marks: r.totalMarks ? Number(r.totalMarks) : null,
       gpa: r.gpa ? Number(r.gpa) : null,
       grade: r.grade ?? null,
@@ -78,9 +78,28 @@ export async function POST(req: Request, { params }: Ctx) {
   const student = await db.student.findUnique({ where: { id: studentId } });
   if (!student) return NextResponse.json({ message: "Student not found" }, { status: 404 });
 
-  const subjects = Array.isArray(body.subjects) ? body.subjects : [];
-  const totalObtained = subjects.reduce((s: number, sub: any) => s + Number(sub.obtainedMarks ?? sub.obtained_marks ?? 0), 0);
-  const totalMax = subjects.reduce((s: number, sub: any) => s + Number(sub.fullMarks ?? sub.max_marks ?? 0), 0);
+  const incomingSubjects: any[] = Array.isArray(body.subjects) ? body.subjects : [];
+
+  // Merge with existing subjects when updating: incoming overrides, existing non-zero preserved, existing zeros dropped
+  let finalSubjects = incomingSubjects;
+  if (body.result_id) {
+    const existing = await db.examResult.findUnique({
+      where: { id: String(body.result_id) },
+      select: { subjects: true },
+    });
+    if (existing?.subjects) {
+      const existingArr: any[] = JSON.parse(existing.subjects as string);
+      const incomingNames = new Set(incomingSubjects.map((s: any) => s.subject));
+      finalSubjects = [
+        ...existingArr.filter((s: any) => !incomingNames.has(s.subject) && Number(s.obtainedMarks ?? 0) > 0),
+        ...incomingSubjects,
+      ];
+    }
+  }
+
+  const subjects = JSON.stringify(finalSubjects);
+  const totalObtained = finalSubjects.reduce((s: number, sub: any) => s + Number(sub.obtainedMarks ?? sub.obtained_marks ?? 0), 0);
+  const totalMax = finalSubjects.reduce((s: number, sub: any) => s + Number(sub.fullMarks ?? sub.max_marks ?? 0), 0);
 
   const result = await db.examResult.upsert({
     where: { id: body.result_id ? String(body.result_id) : "nonexistent" },

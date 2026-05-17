@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -101,7 +101,7 @@ type StudentProfile = {
   receipts: StudentReceipt[];
 };
 
-interface FeeConfig { id: string; name: string; amount: number; type: string; is_active: boolean }
+interface FeeConfig { id: string; name: string; amount: number; type: string; is_active: boolean; allow_bulk: boolean }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -132,6 +132,12 @@ function billStatusColor(s: string) {
     case "waived":  return "bg-blue-50 text-blue-700 border-blue-200";
     default:        return "bg-red-50 text-red-700 border-red-200";
   }
+}
+
+function resolvePhotoUrl(p: string | null | undefined): string | null {
+  if (!p) return null;
+  if (p.startsWith("http")) return p;
+  return `/api/v1/uploads/${p}`;
 }
 
 function InfoRow({ label, value }: { label: string; value?: string | null }) {
@@ -522,6 +528,9 @@ export default function StudentDetailPage({ params }: { params: Promise<{ id: st
       {/* Profile header */}
       <div className="flex items-start gap-5 flex-wrap">
         <Avatar className="size-16 shrink-0">
+          {resolvePhotoUrl(student.photo) && (
+            <AvatarImage src={resolvePhotoUrl(student.photo)!} alt={student.name_en} />
+          )}
           <AvatarFallback className="text-xl font-semibold bg-indigo-50 text-indigo-700">
             {initials(student.name_en)}
           </AvatarFallback>

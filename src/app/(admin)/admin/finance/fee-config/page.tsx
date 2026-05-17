@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ interface FeeConfig {
   due_date: string | null;
   late_fee: number | null;
   is_active: boolean;
+  allow_bulk: boolean;
 }
 
 interface SchoolClass { id: number; name: string; isActive: boolean }
@@ -58,6 +59,7 @@ const feeSchema = z.object({
   due_day: z.coerce.number().min(1).max(31).optional().or(z.literal("")),
   due_date: z.string().optional(),
   late_fee: z.coerce.number().min(0).optional().or(z.literal("")),
+  allow_bulk: z.boolean().default(true),
 });
 type FeeFormInput = z.infer<typeof feeSchema>;
 
@@ -84,6 +86,7 @@ function FeeForm({
       due_day: 10,
       due_date: "",
       late_fee: 0,
+      allow_bulk: true,
       ...defaultValues,
     },
   });
@@ -183,6 +186,30 @@ function FeeForm({
             <FormLabel>Late Fee (৳)</FormLabel>
             <FormControl><Input type="number" min="0" {...field} /></FormControl>
             <FormMessage />
+          </FormItem>
+        )} />
+
+        <FormField control={form.control} name="allow_bulk" render={({ field }) => (
+          <FormItem>
+            <div
+              className={`flex items-center justify-between rounded-lg border p-3 cursor-pointer select-none transition-colors ${field.value ? "border-indigo-200 bg-indigo-50/50" : "border-border bg-muted/30"}`}
+              onClick={() => field.onChange(!field.value)}
+            >
+              <div className="flex items-center gap-2">
+                <Users className="size-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Allow bulk billing</p>
+                  <p className="text-xs text-muted-foreground">
+                    {field.value
+                      ? "Appears in Bulk Billing page"
+                      : "Only assignable per-student (e.g. admission fee)"}
+                  </p>
+                </div>
+              </div>
+              <div className={`w-9 h-5 rounded-full transition-colors ${field.value ? "bg-indigo-600" : "bg-slate-300"} relative`}>
+                <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform ${field.value ? "translate-x-4" : ""}`} />
+              </div>
+            </div>
           </FormItem>
         )} />
 
@@ -296,6 +323,9 @@ export default function FeeConfigPage() {
                         +৳{fee.late_fee} late
                       </Badge>
                     )}
+                    {!fee.allow_bulk && (
+                      <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">Per-student only</Badge>
+                    )}
                     {!fee.is_active && (
                       <Badge variant="outline" className="text-xs text-muted-foreground">Inactive</Badge>
                     )}
@@ -365,6 +395,7 @@ export default function FeeConfigPage() {
                 due_day: editing.due_day ?? undefined,
                 due_date: editing.due_date ?? "",
                 late_fee: editing.late_fee ?? undefined,
+                allow_bulk: editing.allow_bulk,
               }}
               classes={classNames}
               onSubmit={(v) => updateMutation.mutate(v)}

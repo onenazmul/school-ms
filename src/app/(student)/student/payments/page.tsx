@@ -656,6 +656,25 @@ export default function StudentPaymentsPage() {
         </div>
       )}
 
+      {/* Sticky Pay bar — visible at any scroll depth */}
+      {canPay && (
+        <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white px-4 py-3 shadow-xl shadow-black/20 whitespace-nowrap">
+          <p className="text-sm font-medium">
+            {selectedBillIds.size + advanceKeys.size} item{selectedBillIds.size + advanceKeys.size !== 1 ? "s" : ""} selected
+            <span className="text-slate-400 ml-1.5 font-normal">— ৳{totalAmount.toLocaleString()}</span>
+          </p>
+          <Separator orientation="vertical" className="h-4 bg-slate-600" />
+          <Button
+            size="sm"
+            className="bg-indigo-500 hover:bg-indigo-400 text-white gap-1.5 h-8 text-xs"
+            onClick={() => setPayOpen(true)}
+          >
+            <CreditCard className="size-3.5" />
+            Pay ৳{totalAmount.toLocaleString()}
+          </Button>
+        </div>
+      )}
+
       {/* Payment dialog */}
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">

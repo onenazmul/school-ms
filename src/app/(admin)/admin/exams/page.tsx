@@ -1,7 +1,7 @@
 "use client";
-// app/(admin)/admin/exams/page.tsx
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -16,10 +16,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   BookOpen, Plus, ChevronRight, Calendar, Users, FileText, Loader2,
 } from "lucide-react";
-import { useQuery as useClassesQuery } from "@tanstack/react-query";
 
 type Exam = {
   id: string;
@@ -43,6 +43,7 @@ function statusBadge(status: string) {
 }
 
 export default function ExamsPage() {
+  const router = useRouter();
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -51,17 +52,26 @@ export default function ExamsPage() {
     queryFn: () => fetch("/api/v1/admin/exams").then((r) => r.json()),
   });
 
-  const { data: classesData } = useClassesQuery<{ classes: ApiClass[] }>({
+  const { data: classesData } = useQuery<{ classes: ApiClass[] }>({
     queryKey: ["classes-for-docs"],
     queryFn: () => fetch("/api/v1/admin/classes").then((r) => r.json()),
   });
 
+  const { data: settingsData } = useQuery<{ setting: { academic_year: string } }>({
+    queryKey: ["school-setting"],
+    queryFn: () => fetch("/api/v1/admin/settings").then((r) => r.json()),
+  });
+
   const exams = data?.exams ?? [];
   const classes = classesData?.classes ?? [];
+  const settingsYear = settingsData?.setting?.academic_year ?? "";
 
-  const [form, setForm] = useState({
-    name: "", academic_year: "", class_name: "", start_date: "", end_date: "",
-  });
+  const [form, setForm] = useState({ name: "", academic_year: "", class_name: "", schedule_mode: "shared" });
+
+  // Prefill academic_year when settings load
+  if (settingsYear && !form.academic_year) {
+    setForm((f) => ({ ...f, academic_year: settingsYear }));
+  }
 
   const createMutation = useMutation({
     mutationFn: (body: typeof form) =>
@@ -73,11 +83,12 @@ export default function ExamsPage() {
         if (!r.ok) throw new Error((await r.json()).message);
         return r.json();
       }),
-    onSuccess: () => {
-      toast.success("Exam created");
+    onSuccess: (data) => {
+      toast.success("Exam created — set up the schedule");
       qc.invalidateQueries({ queryKey: ["admin-exams"] });
       setCreateOpen(false);
-      setForm({ name: "", academic_year: "", class_name: "", start_date: "", end_date: "" });
+      setForm({ name: "", academic_year: settingsYear, class_name: "", schedule_mode: "shared" });
+      router.push(`/admin/exams/${data.exam.id}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -138,8 +149,10 @@ export default function ExamsPage() {
                   <p className="font-medium truncate">{exam.name}</p>
                   <div className="flex items-center flex-wrap gap-3 mt-1">
                     <span className="text-xs text-muted-foreground">{exam.academic_year}</span>
-                    {exam.class_name && (
+                    {exam.class_name ? (
                       <span className="text-xs text-muted-foreground">{exam.class_name}</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">All Classes</span>
                     )}
                     {exam.start_date && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -181,6 +194,7 @@ export default function ExamsPage() {
                 placeholder="e.g. Annual Examination 2025-26"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                autoFocus
               />
             </div>
             <div className="space-y-1.5">
@@ -192,35 +206,42 @@ export default function ExamsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Class (optional — leave blank for all classes)</Label>
+              <Label>Class</Label>
               <Select
                 value={form.class_name || "all"}
                 onValueChange={(v) => setForm((f) => ({ ...f, class_name: v === "all" ? "" : v }))}
               >
                 <SelectTrigger><SelectValue placeholder="All Classes" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Classes</SelectItem>
+                  <SelectItem value="all">All Classes (auto-load all subjects)</SelectItem>
                   {classes.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Start Date</Label>
-                <Input
-                  type="date"
-                  value={form.start_date}
-                  onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
-                />
+            <div className="space-y-1.5">
+              <Label>Schedule Type</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(["shared", "per_class"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, schedule_mode: mode }))}
+                    className={cn(
+                      "py-2 rounded-lg border text-sm font-medium transition-colors",
+                      form.schedule_mode === mode
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-background hover:bg-muted/50 text-foreground"
+                    )}
+                  >
+                    {mode === "shared" ? "Shared" : "Per-Class"}
+                  </button>
+                ))}
               </div>
-              <div className="space-y-1.5">
-                <Label>End Date</Label>
-                <Input
-                  type="date"
-                  value={form.end_date}
-                  onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))}
-                />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                {form.schedule_mode === "shared"
+                  ? "One date/time per subject, applies to all classes."
+                  : "Each class has its own separate timetable per subject."}
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -230,7 +251,7 @@ export default function ExamsPage() {
               disabled={!form.name || !form.academic_year || createMutation.isPending}
               onClick={() => createMutation.mutate(form)}
             >
-              {createMutation.isPending ? <><Loader2 className="size-4 animate-spin mr-2" />Creating…</> : "Create Exam"}
+              {createMutation.isPending ? <><Loader2 className="size-4 animate-spin mr-2" />Creating…</> : "Create & Set Up Schedule →"}
             </Button>
           </DialogFooter>
         </DialogContent>

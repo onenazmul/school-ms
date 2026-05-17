@@ -54,7 +54,7 @@ export async function GET() {
 
   // Filter fee configs applicable to the student's class
   const myFeeConfigs = (applicableFeeConfigs as any[]).filter((fc) => {
-    const classes: string[] = Array.isArray(fc.applicableClasses) ? fc.applicableClasses : [];
+    const classes: string[] = fc.applicableClasses ? JSON.parse(fc.applicableClasses as string) as string[] : [];
     return classes.includes(student?.className ?? "");
   });
 

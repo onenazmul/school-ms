@@ -5,6 +5,7 @@ import { IDCardPDF } from "@/components/documents/pdf/IDCardPDF";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { createElement } from "react";
+import { photoToDataUri } from "@/lib/documents/photo-utils";
 
 function fmtDate(d: Date | null | undefined) {
   if (!d) return null;
@@ -56,7 +57,8 @@ export async function POST(req: Request) {
     archive.on("end", () => resolve(Buffer.concat(chunks)));
     archive.on("error", reject);
 
-    const pdfPromises = students.map((student) => {
+    const pdfPromises = students.map(async (student) => {
+      const photo = await photoToDataUri(student.admission?.studentPhoto);
       const cardStudent = {
         id: student.id,
         username: student.user?.username ?? student.id,
@@ -69,11 +71,11 @@ export async function POST(req: Request) {
         blood_group: student.admission?.bloodGroup ?? null,
         guardian_name: student.admission?.guardianName ?? null,
         guardian_phone: student.admission?.guardianMobileNo ?? null,
+        photo,
       };
       const element = createElement(IDCardPDF, { student: cardStudent, schoolInfo });
-      return renderToBuffer(element as any).then((buf) => {
-        archive.append(buf, { name: `id-card-${cardStudent.username}.pdf` });
-      });
+      const buf = await renderToBuffer(element as any);
+      archive.append(buf, { name: `id-card-${cardStudent.username}.pdf` });
     });
 
     Promise.all(pdfPromises).then(() => archive.finalize()).catch(reject);

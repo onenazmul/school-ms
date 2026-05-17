@@ -163,8 +163,8 @@ export async function POST(req: Request) {
       if (!feeConfig?.isActive)
         return NextResponse.json({ message: `Fee config not found or inactive` }, { status: 422 });
 
-      const applicableClasses = Array.isArray(feeConfig.applicableClasses)
-        ? (feeConfig.applicableClasses as string[])
+      const applicableClasses = feeConfig.applicableClasses
+        ? JSON.parse(feeConfig.applicableClasses as string) as string[]
         : [];
       if (!applicableClasses.includes(student.className))
         return NextResponse.json({ message: `Fee "${feeConfig.name}" does not apply to your class` }, { status: 422 });

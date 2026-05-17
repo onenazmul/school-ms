@@ -117,40 +117,39 @@ export function AdmissionShell({
         </div>
       </header>
 
-      {/* ── Mobile nav ── */}
-      <nav className="sm:hidden border-b bg-background px-3 py-1.5 flex gap-1 overflow-x-auto print:hidden">
-        {NAV.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || (href !== "/admission/dashboard" && pathname.startsWith(href));
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
-                active
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-muted-foreground hover:bg-accent"
-              )}
-            >
-              <Icon className="size-3.5" />
-              {label}
-            </Link>
-          );
-        })}
-        <a
-          href="/student/dashboard"
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap text-indigo-600 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 transition-colors"
-        >
-          <GraduationCap className="size-3.5" />
-          Student Panel
-          <ExternalLink className="size-3 opacity-60" />
-        </a>
-      </nav>
-
       {/* ── Content ── */}
-      <main className="flex-1 p-4 sm:p-6 max-w-4xl mx-auto w-full">
+      <main className="flex-1 p-4 sm:p-6 pb-20 sm:pb-6 max-w-4xl mx-auto w-full">
         {children}
       </main>
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80 print:hidden">
+        <div className="flex items-stretch">
+          {NAV.map(({ label, href, icon: Icon }) => {
+            const active = pathname === href || (href !== "/admission/dashboard" && pathname.startsWith(href));
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex flex-1 flex-col items-center justify-center gap-1 py-3 text-[10px] font-medium transition-colors",
+                  active ? "text-indigo-600" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className={cn("size-5", active && "text-indigo-600")} />
+                {label}
+              </Link>
+            );
+          })}
+          <a
+            href="/student/dashboard"
+            className="flex flex-1 flex-col items-center justify-center gap-1 py-3 text-[10px] font-medium text-indigo-600 transition-colors"
+          >
+            <GraduationCap className="size-5" />
+            Student
+          </a>
+        </div>
+      </nav>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { ResultCardPDF } from "@/components/documents/pdf/ResultCardPDF";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { createElement } from "react";
+import { photoToDataUri } from "@/lib/documents/photo-utils";
 
 function fmtDate(d: Date | null | undefined) {
   if (!d) return null;
@@ -33,6 +34,7 @@ export async function GET(
     }),
     db.schoolSetting.findUnique({ where: { id: 1 } }),
   ]);
+  const photo = await photoToDataUri(student?.admission?.studentPhoto);
 
   if (!student) {
     return new Response(JSON.stringify({ error: "Student not found" }), {
@@ -63,11 +65,13 @@ export async function GET(
     gender: student.admission?.gender ?? null,
     dob: fmtDate(student.admission?.dob),
     guardian_name: student.admission?.guardianName ?? null,
+    photo,
   };
 
-  const rawSubjects = (examResult.subjects as any[]) ?? [];
+  const rawSubjects = (JSON.parse(examResult.subjects as string) as any[]) ?? [];
   const subjects = rawSubjects.map((s: any) => ({
     subject:        String(s.subject ?? ""),
+    subject_code:   s.subject_code ? String(s.subject_code) : null,
     max_marks:      Number(s.fullMarks ?? s.max_marks ?? 0),
     obtained_marks: Number(s.obtainedMarks ?? s.obtained_marks ?? 0),
     grade:          String(s.grade ?? ""),

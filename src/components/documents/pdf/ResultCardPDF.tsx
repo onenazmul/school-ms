@@ -1,6 +1,6 @@
 // components/documents/pdf/ResultCardPDF.tsx
 import {
-  Document, Page, View, Text, StyleSheet,
+  Document, Page, View, Text, StyleSheet, Image,
 } from "@react-pdf/renderer";
 
 export type ResultCardStudent = {
@@ -13,12 +13,13 @@ export type ResultCardStudent = {
   gender: string | null;
   dob: string | null;
   guardian_name: string | null;
+  photo?: string | null;
 };
 
 export type ResultCardResult = {
   exam_term: string;
   academic_year: string;
-  subjects: { subject: string; max_marks: number; obtained_marks: number; grade: string; remarks: string }[];
+  subjects: { subject: string; subject_code?: string | null; max_marks: number; obtained_marks: number; grade: string; remarks: string }[];
   total_obtained: number;
   total_max: number;
   percentage: number;
@@ -320,7 +321,11 @@ export function ResultCardPDF({ student, result, schoolInfo }: Props) {
             ))}
           </View>
           <View style={styles.infoRight}>
-            <Text style={styles.photoLabel}>PHOTO</Text>
+            {student.photo ? (
+              <Image src={student.photo} style={{ width: 70, height: 88, objectFit: "cover", borderRadius: 3 }} />
+            ) : (
+              <Text style={styles.photoLabel}>PHOTO</Text>
+            )}
           </View>
         </View>
 
@@ -334,7 +339,9 @@ export function ResultCardPDF({ student, result, schoolInfo }: Props) {
         </View>
         {result.subjects.map((s, i) => (
           <View key={s.subject} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]}>
-            <Text style={[styles.cellText, styles.col_subject as any]}>{s.subject}</Text>
+            <Text style={[styles.cellText, styles.col_subject as any]}>
+              {s.subject_code ? `${s.subject_code} - ${s.subject}` : s.subject}
+            </Text>
             <Text style={[styles.cellText, styles.col_max as any]}>{s.max_marks}</Text>
             <Text style={[styles.cellText, styles.col_obt as any]}>{s.obtained_marks}</Text>
             <Text style={[styles.cellText, styles.col_grade as any]}>{s.grade}</Text>

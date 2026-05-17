@@ -41,8 +41,8 @@ export async function POST(req: Request) {
   let totalSkipped = 0;
 
   for (const fee of feeConfigs) {
-    const applicableClasses: string[] = Array.isArray(fee.applicableClasses)
-      ? (fee.applicableClasses as string[])
+    const applicableClasses: string[] = fee.applicableClasses
+      ? JSON.parse(fee.applicableClasses as string) as string[]
       : [];
     if (applicableClasses.length === 0) continue;
 

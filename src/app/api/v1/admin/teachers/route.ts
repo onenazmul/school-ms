@@ -13,7 +13,7 @@ function serialize(t: {
     id: t.id, name: t.name, email: t.email, phone: t.phone,
     subject: t.subject, designation: t.designation, qualification: t.qualification,
     joining_date: t.joiningDate ? t.joiningDate.toISOString().split("T")[0] : null,
-    classes: Array.isArray(t.classes) ? t.classes as string[] : [],
+    classes: t.classes ? JSON.parse(t.classes as string) as string[] : [],
     status: t.status,
   };
 }
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
         designation: designation ? String(designation) : "Teacher",
         qualification: qualification ? String(qualification).trim() : null,
         joiningDate: joining_date ? new Date(String(joining_date)) : null,
-        classes: Array.isArray(classes) ? classes : [],
+        classes: JSON.stringify(Array.isArray(classes) ? classes : []),
         status: "active",
       },
     });

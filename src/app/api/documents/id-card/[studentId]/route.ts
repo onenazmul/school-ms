@@ -4,6 +4,7 @@ import { IDCardPDF } from "@/components/documents/pdf/IDCardPDF";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth/helpers";
 import { createElement } from "react";
+import { photoToDataUri } from "@/lib/documents/photo-utils";
 
 function fmtDate(d: Date | null | undefined) {
   if (!d) return null;
@@ -29,6 +30,7 @@ export async function GET(
     }),
     db.schoolSetting.findUnique({ where: { id: 1 } }),
   ]);
+  const photo = await photoToDataUri(student?.admission?.studentPhoto);
 
   if (!student) {
     return new Response(JSON.stringify({ error: "Student not found" }), {
@@ -55,6 +57,7 @@ export async function GET(
     blood_group: student.admission?.bloodGroup ?? null,
     guardian_name: student.admission?.guardianName ?? null,
     guardian_phone: student.admission?.guardianMobileNo ?? null,
+    photo,
   };
 
   const element = createElement(IDCardPDF, { student: cardStudent, schoolInfo });
